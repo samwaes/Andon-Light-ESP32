@@ -22,9 +22,12 @@ Status: in progress
 - [ ] Flash minimal ESPHome firmware
 - [ ] Verify serial log output
 - [ ] Join home Wi-Fi
-- [ ] Verify OTA update
+- [ ] Verify fallback AP and captive portal
+- [ ] Verify ESPHome OTA update
+- [ ] Verify authenticated web OTA update
+- [ ] Confirm UART remains available as recovery path
 
-Success criterion: the ESP32 can be reflashed over Wi-Fi without the UART adapter.
+Success criterion: the ESP32 can be reflashed over Wi-Fi without the UART adapter and can accept new Wi-Fi credentials through its fallback access point when no known network is available.
 
 ## Phase 2 - MOSFET output mapping
 

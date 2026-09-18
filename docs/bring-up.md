@@ -7,7 +7,7 @@ This procedure deliberately stops before connecting the 12 V Andon.
 Reach this state first:
 
 ```text
-PC -> USB-UART -> ESP32 -> ESPHome -> Wi-Fi -> OTA
+PC -> USB-UART -> ESP32 -> ESPHome -> Wi-Fi -> OTA -> fallback Wi-Fi recovery
 ```
 
 Only after this works should the MOSFET channels and Andon lamp be connected.
@@ -78,13 +78,34 @@ If testing at home:
 - confirm it remains online
 - confirm encrypted native API connectivity
 
-## Step 7 - Verify OTA
+## Step 7 - Verify ESPHome OTA
 
-Make a harmless change to the device configuration and upload over Wi-Fi.
+Make a harmless change to the device configuration and upload over Wi-Fi from ESPHome.
 
-Once OTA works, the UART adapter is only needed for recovery.
+Once this works, normal development no longer requires the UART adapter.
 
-## Step 8 - Map MOSFET outputs
+## Step 8 - Verify fallback AP and captive portal
+
+1. Temporarily make the configured Wi-Fi networks unavailable.
+2. Wait for the ESP32 fallback access point to appear.
+3. Connect a phone or laptop to the fallback SSID.
+4. Open the captive portal.
+5. Confirm that a new Wi-Fi network can be selected/provisioned.
+6. Restore the normal test network and verify the ESP32 reconnects.
+
+Do not use a production or sensitive Wi-Fi password for this first test.
+
+## Step 9 - Verify web OTA
+
+1. Open the authenticated ESPHome web interface.
+2. Locate the OTA update section.
+3. Use a harmless precompiled firmware build.
+4. Upload it through the browser.
+5. Confirm the device reboots and reconnects.
+
+UART remains the recovery method if either OTA path fails.
+
+## Step 10 - Map MOSFET outputs
 
 Do not connect the Andon yet.
 
@@ -101,7 +122,7 @@ For each candidate channel:
 
 Update `docs/hardware.md` and the ESPHome configuration with confirmed mappings.
 
-## Step 9 - 12 V integration
+## Step 11 - 12 V integration
 
 After output behavior is understood:
 

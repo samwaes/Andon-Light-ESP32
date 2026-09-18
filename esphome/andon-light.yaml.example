@@ -1,0 +1,78 @@
+substitutions:
+  device_name: andon-light-01
+  friendly_name: Andon Light 01
+  mqtt_prefix: hupla/demo/factory01/line01/andon01
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  project:
+    name: hupla.andon-light
+    version: "0.1.0"
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  networks:
+    - ssid: !secret wifi_home_ssid
+      password: !secret wifi_home_password
+
+    - ssid: !secret wifi_demo_ssid
+      password: !secret wifi_demo_password
+
+mqtt:
+  broker: !secret mqtt_broker
+  port: 1883
+  username: !secret mqtt_username
+  password: !secret mqtt_password
+
+  # Home Assistant will use the native ESPHome API.
+  # Keep MQTT available for the industrial/UNS interface.
+  discovery: false
+  discover_ip: true
+
+  birth_message:
+    topic: ${mqtt_prefix}/status/online
+    payload: online
+    retain: true
+
+  will_message:
+    topic: ${mqtt_prefix}/status/online
+    payload: offline
+    retain: true
+
+# Optional commissioning UI. Enable only after adding authentication.
+#
+# web_server:
+#   port: 80
+#   local: true
+#   auth:
+#     username: !secret web_username
+#     password: !secret web_password
+
+# GPIO-to-MOSFET mapping is intentionally NOT configured yet.
+# The received board must be tested first.
+#
+# Once confirmed, add four GPIO switches/outputs and map them to:
+# OUT1 -> Red
+# OUT2 -> Yellow
+# OUT3 -> Green
+# OUT4 -> Buzzer
+#
+# Also verify whether the GPIO output needs inverted: true.
+
+# Custom semantic MQTT handling will be added after the physical
+# output mapping is confirmed.

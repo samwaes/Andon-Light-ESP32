@@ -11,6 +11,7 @@ The same ESP32 firmware should support:
 3. Standard MQTT through a broker
 4. Optional browser access for commissioning
 5. OTA firmware updates
+6. Fallback Wi-Fi provisioning through a captive portal
 
 ## Logical architecture
 
@@ -105,6 +106,8 @@ Wi-Fi and MQTT broker discovery are separate problems.
 
 ESPHome supports multiple configured Wi-Fi networks, so one firmware can know the home SSID and one or more lab/demo SSIDs.
 
+If none of the configured networks are available, the firmware should start a protected fallback access point. The ESPHome captive portal can then be used from a phone or laptop to provide temporary or replacement Wi-Fi credentials without using the UART programmer.
+
 The MQTT broker address is normally configured as one hostname/IP. Three approaches are possible:
 
 ### A. Portable demo network
@@ -163,3 +166,19 @@ The device should be designed so that:
 - ESPHome Wi-Fi: https://esphome.io/components/wifi/
 - ESPHome MQTT: https://esphome.io/components/mqtt/
 - ESPHome Web Server: https://esphome.io/components/web_server/
+
+
+## Configuration and update model
+
+The device has four distinct maintenance paths:
+
+| Path | Purpose | Typical use |
+| --- | --- | --- |
+| UART serial flash | Full recovery and first install | First flash, broken Wi-Fi, recovery |
+| ESPHome OTA | Normal firmware/configuration update | Day-to-day development |
+| Captive portal | Change Wi-Fi connection | Unknown lab/customer Wi-Fi |
+| Web OTA | Install a precompiled firmware image | Field maintenance without ESPHome tooling |
+
+The local web UI is not the source editor for the ESPHome YAML. It is primarily a control/diagnostic interface. When web OTA is enabled, it can additionally accept a compiled firmware image.
+
+The canonical source remains the YAML in this repository.

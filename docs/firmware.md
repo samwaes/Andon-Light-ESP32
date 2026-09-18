@@ -44,6 +44,12 @@ wifi:
 
     - ssid: !secret wifi_demo_ssid
       password: !secret wifi_demo_password
+
+  ap:
+    ssid: !secret fallback_ap_ssid
+    password: !secret fallback_ap_password
+
+captive_portal:
 ```
 
 Do not hard-code credentials in the main YAML committed to GitHub.
@@ -58,18 +64,28 @@ This can be reconsidered later if another ESP-IDF-specific feature becomes neces
 
 After the first UART flash, normal firmware updates should happen over Wi-Fi.
 
-UART is retained as a recovery method.
+Two OTA paths are planned:
+
+1. ESPHome OTA for normal development from the YAML source.
+2. Web-server OTA for field updates using a precompiled firmware image.
+
+UART is retained as the recovery method if networking or OTA becomes unusable.
+
+The normal web interface does not edit the YAML source. Configuration changes such as GPIO logic, MQTT behavior or known SSIDs still belong in the repository and require a firmware rebuild. Wi-Fi credentials are the exception because the captive portal can provision a network at runtime.
 
 ## Web interface
 
 A local ESPHome web server may be added for commissioning and demonstrations.
 
-If enabled:
+The web server is enabled for commissioning and demonstrations.
+
+Requirements:
 
 - require authentication
 - prefer local embedded assets if offline operation is needed
 - do not treat it as the main industrial interface
 - avoid exposing it directly to untrusted networks
+- enable web OTA so a compiled firmware image can be installed without ESPHome tooling
 
 ## State model
 

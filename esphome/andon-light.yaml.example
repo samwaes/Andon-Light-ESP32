@@ -8,7 +8,7 @@ esphome:
   friendly_name: ${friendly_name}
   project:
     name: hupla.andon-light
-    version: "0.1.0"
+    version: "0.2.0"
 
 esp32:
   board: esp32dev
@@ -24,6 +24,7 @@ api:
 ota:
   - platform: esphome
     password: !secret ota_password
+  - platform: web_server
 
 wifi:
   networks:
@@ -32,6 +33,13 @@ wifi:
 
     - ssid: !secret wifi_demo_ssid
       password: !secret wifi_demo_password
+
+  # If no known network is available, expose a protected setup AP.
+  ap:
+    ssid: !secret fallback_ap_ssid
+    password: !secret fallback_ap_password
+
+captive_portal:
 
 mqtt:
   broker: !secret mqtt_broker
@@ -54,14 +62,15 @@ mqtt:
     payload: offline
     retain: true
 
-# Optional commissioning UI. Enable only after adding authentication.
-#
-# web_server:
-#   port: 80
-#   local: true
-#   auth:
-#     username: !secret web_username
-#     password: !secret web_password
+# Local commissioning and diagnostic UI.
+# Web OTA accepts a compiled firmware image. It does not edit this YAML.
+web_server:
+  port: 80
+  version: 3
+  local: true
+  auth:
+    username: !secret web_username
+    password: !secret web_password
 
 # GPIO-to-MOSFET mapping is intentionally NOT configured yet.
 # The received board must be tested first.

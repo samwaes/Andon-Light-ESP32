@@ -1,0 +1,10 @@
+# ESPHome secrets
+esphome/secrets.yaml
+
+# ESPHome build/cache
+.esphome/
+esphome/.esphome/
+
+# Editor / OS files
+.DS_Store
+Thumbs.db

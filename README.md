@@ -11,6 +11,8 @@ Build one physical Andon device that can be used in several ways without reflash
 - Industrial lab and UNS demonstrations through an MQTT broker
 - Local device logic so the light still behaves predictably if Home Assistant is unavailable
 - Optional local web interface for commissioning and fallback control
+- Fallback Wi-Fi access point and captive portal for joining unknown lab networks
+- Multiple firmware update paths: UART recovery, ESPHome OTA and browser-based web OTA
 
 The design principle is to keep the physical device, Home Assistant integration, and industrial MQTT namespace separate.
 
@@ -136,6 +138,7 @@ instead of requiring external systems to know GPIO numbers.
 │   ├── hardware.md
 │   ├── firmware.md
 │   ├── mqtt-uns.md
+│   ├── update-model.md
 │   └── bring-up.md
 └── esphome/
     ├── andon-light.yaml.example
@@ -150,12 +153,14 @@ Next technical steps:
 
 1. Solder the six-pin UART programming header.
 2. Verify the USB-UART adapter is operating at 3.3 V logic.
-3. Perform the first ESPHome flash.
-4. Determine the GPIO mapping for OUT1 to OUT4.
-5. Verify the MOSFET output polarity and terminal behavior with a multimeter.
-6. Connect the 12 V Andon.
-7. Add Home Assistant native API control.
-8. Add MQTT and the UNS topic model.
-9. Validate operation with Home Assistant disconnected.
+3. Perform the first ESPHome flash with fallback AP, captive portal and OTA enabled.
+4. Verify ESPHome OTA and browser-based web OTA.
+5. Test Wi-Fi recovery through the fallback access point.
+6. Determine the GPIO mapping for OUT1 to OUT4.
+7. Verify the MOSFET output polarity and terminal behavior with a multimeter.
+8. Connect the 12 V Andon.
+9. Add Home Assistant native API control.
+10. Add MQTT and the UNS topic model.
+11. Validate operation with Home Assistant disconnected.
 
 See [ROADMAP.md](ROADMAP.md) for the implementation plan.

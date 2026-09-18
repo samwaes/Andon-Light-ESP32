@@ -1,0 +1,144 @@
+# Hardware
+
+## 1. Andon light
+
+Model: HNTD TD-50
+
+Configuration observed from the product label:
+
+- 12 V DC
+- constant-light variant
+- red, yellow and green indication
+- buzzer output
+
+### Cable mapping
+
+| Cable color | Function |
+| --- | --- |
+| Brown | Common positive, +12 V |
+| Red | Red lamp control |
+| Yellow | Yellow lamp control |
+| Green | Green lamp control |
+| Orange | Buzzer control |
+
+The wiring diagram on the unit shows a common positive supply. Each function is activated by switching its individual control wire toward the negative/0 V side.
+
+## 2. ESP32 quad MOSFET board
+
+Received hardware is marked as an ESP32 MOS x4 board and contains an ESP32-WROOM-32E module.
+
+Observed features:
+
+- ESP32-WROOM-32E
+- four MOSFET channels
+- channel terminal markings OUT1 to OUT4
+- wide-voltage DC input
+- USB-C power connector
+- IO0 pushbutton
+- UART programming header
+- exposed ESP32 GPIO footprint
+
+MOSFET marking observed on the board: NCE6020AK.
+
+### UART programming header
+
+The board silkscreen identifies:
+
+```text
+5V | TX | RX | GND | GND | IO0
+```
+
+The header pins are not yet soldered.
+
+### GPIO breakout
+
+The back of the board exposes standard ESP32 signals including GPIOs, power and ground. These are useful for later additions such as an acknowledge button.
+
+### Unknowns to verify
+
+Do not finalize firmware pin assignments until these are tested:
+
+- GPIO -> OUT1 mapping
+- GPIO -> OUT2 mapping
+- GPIO -> OUT3 mapping
+- GPIO -> OUT4 mapping
+- active-high versus active-low GPIO behavior
+- exact relationship between each OUT+ and OUT- terminal
+- output state during ESP32 reset/boot
+
+## 3. USB-to-UART adapter
+
+The received adapter exposes:
+
+```text
+3V3 | GND | +5V | TXD | RXD | DTR
+```
+
+For initial flashing:
+
+```text
+USB-UART       ESP32
+TXD         -> RX
+RXD         -> TX
+GND         -> GND
+```
+
+Do not connect +5 V or 3.3 V from the UART adapter when the ESP32 board is independently powered.
+
+The UART logic level must be 3.3 V compatible with the ESP32.
+
+## 4. Initial bootloader procedure
+
+1. Turn ESP32 board power off.
+2. Connect USB-UART TXD, RXD and GND.
+3. Hold IO0 to GND.
+4. Apply power to the ESP32 board.
+5. Start firmware flashing.
+6. After flashing, remove power.
+7. Release/remove IO0-to-GND.
+8. Reapply power for normal boot.
+
+The physical IO0 pushbutton may be used instead of a jumper once its behavior is confirmed.
+
+## 5. Proposed Andon connection
+
+Expected low-side topology:
+
+```text
+12 V PSU +  ------------------ Brown Andon wire
+     |
+     +------------------------ ESP32 board VIN+
+
+12 V PSU 0 V ---------------- ESP32 board GND
+
+ESP32 OUT1 switched low ------ Red
+ESP32 OUT2 switched low ------ Yellow
+ESP32 OUT3 switched low ------ Green
+ESP32 OUT4 switched low ------ Orange / buzzer
+```
+
+This is a target diagram, not yet a verified wiring instruction. Before connecting the lamp, verify the MOSFET terminals with a multimeter.
+
+## 6. Power
+
+The lamp is a 12 V device and the controller accepts 12 V input, so the final demonstrator can use one 12 V DC supply.
+
+Before selecting the final supply, measure or obtain:
+
+- current with green on
+- current with yellow on
+- current with red on
+- current with buzzer on
+- worst-case current with multiple functions active
+
+Use a fused supply and appropriate wire/strain relief in the final enclosure.
+
+## 7. Planned additions
+
+Possible future I/O:
+
+- acknowledge button
+- reset button
+- local mode selector
+- maintenance/test button
+- external sensor or simulated machine input

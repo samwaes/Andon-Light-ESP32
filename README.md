@@ -154,34 +154,26 @@ instead of requiring external systems to know GPIO numbers.
 
 As of 2026-09-19:
 
-- first serial flash completed successfully
-- ESPHome 2026.8.2 running on ESP32 rev 3.1
-- device online on Wi-Fi
-- encrypted ESPHome native API confirmed
-- OTA update confirmed by changing the friendly name and reflashing wirelessly
-- ESPHome Web OTA component present
-- UART programming header soldered
-- 12 V Andon not yet connected
-- MOSFET GPIO mapping not yet physically verified
-- local web portal tested successfully
-- 12 V board/Andon operation tested
-- Andon light connected and controllable
-- internal TD-50 red/yellow interaction confirmed by swapping MOSFET channels; this is treated as an Andon hardware limitation
-- semantic Andon modes, flashing patterns, acknowledge behavior and Buzzer Mute Override tested and working
-- Home Assistant Mosquitto broker installed at the home lab
-- MQTT credentials added to ESPHome secrets
-- firmware 0.5.0 adds runtime MQTT broker configuration through the Andon web interface
-- semantic MQTT command/state topics are the next step
+- ESP32-WROOM-32E controller and 12 V HNTD TD-50 Andon are operational
+- GPIO16 / GPIO17 / GPIO26 / GPIO27 drive red / yellow / green / buzzer through the four MOSFET outputs
+- local ESPHome web portal, fallback architecture, encrypted native API and OTA are operational
+- semantic Andon modes, flashing patterns, acknowledge behavior and Buzzer Mute Override are deployed and working
+- the TD-50 red/yellow interaction is confirmed as an internal Andon limitation, so semantic modes use one color at a time
+- firmware 0.5.0 is deployed
+- MQTT broker address, port, username, password and topic prefix can be configured from the Andon web interface without reflashing
+- the device connects successfully to the Home Assistant Mosquitto broker at 192.168.129.15:1883
+- MQTT subscribe/listen and publish control have been verified from Home Assistant
+- standard ESPHome MQTT topics can currently read and change Andon mode, mute and acknowledge behavior
+- custom semantic UNS topics are deliberately deferred for now
 
-Next technical steps:
+Current baseline is therefore a working portable Andon controller with local control, Home Assistant control and standard MQTT control.
 
-1. Deploy firmware 0.5.0 with runtime MQTT configuration.
-2. Verify the home Mosquitto broker at 192.168.129.15.
-3. Change broker/port/credentials from the Andon web interface without reflashing.
-4. Verify the saved broker settings survive reboot.
-5. Test against a second MQTT broker to prove portability.
-6. Add semantic MQTT command/state topics for mode, acknowledge and buzzer mute.
-7. Verify browser-based web OTA.
-8. Validate standalone operation with Home Assistant disconnected.
+Next technical steps, when the project is resumed:
+
+1. Verify MQTT settings survive a full power cycle.
+2. Point the Andon at a second MQTT broker from the web interface to prove site portability.
+3. Validate standalone operation with Home Assistant unavailable.
+4. Verify browser-based web OTA.
+5. Later, decide whether to add custom semantic MQTT/UNS topics, retained state and birth/last-will conventions.
 
 See [ROADMAP.md](ROADMAP.md) for the implementation plan.

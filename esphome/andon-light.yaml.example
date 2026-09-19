@@ -429,6 +429,9 @@ text:
       sorting_group_id: group_mqtt
       sorting_weight: 40
 
+  # Reserved for a later custom semantic MQTT/UNS layer.
+  # Firmware 0.5.0 stores this value but does not use it to rewrite
+  # ESPHome's standard automatic MQTT topics.
   - platform: template
     id: mqtt_topic_prefix_config
     name: "MQTT Topic Prefix"
@@ -630,7 +633,9 @@ interval:
           id(blink_tick) = (id(blink_tick) + 1) % 8;
       - script.execute: render_andon
 
-# MQTT transport is now runtime-configurable.
-# Semantic command/state topics are the next step after the runtime
-# broker configuration has been verified against the home Mosquitto
-# broker and at least one alternate broker.
+# MQTT transport is runtime-configurable and has been validated against
+# the home Mosquitto broker. Standard ESPHome MQTT command/state topics
+# are the current working baseline.
+#
+# Custom semantic Hupla/UNS topics are deliberately deferred. The runtime
+# topic-prefix field above is reserved for that future layer.

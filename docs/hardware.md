@@ -1,174 +1,169 @@
 # Hardware
 
+Last reviewed: 2026-09-19
+
 ## 1. Andon light
 
 Model: HNTD TD-50
 
-Configuration observed from the product label:
+Confirmed configuration:
 
 - 12 V DC
-- constant-light variant
-- red, yellow and green indication
-- buzzer output
+- constant-light version
+- red, yellow and green
+- buzzer
+- common positive supply
 
 ### Cable mapping
 
 | Cable color | Function |
 | --- | --- |
-| Brown | Common positive, +12 V |
+| Brown | Common +12 V |
 | Red | Red lamp control |
 | Yellow | Yellow lamp control |
 | Green | Green lamp control |
 | Orange | Buzzer control |
 
-The wiring diagram on the unit shows a common positive supply. Each function is activated by switching its individual control wire toward the negative/0 V side.
+Each function is activated by switching its control wire toward 0 V.
 
-## 2. ESP32 quad MOSFET board
+## 2. ESP32 quad-MOSFET controller
 
-Received hardware is marked as an ESP32 MOS x4 board and contains an ESP32-WROOM-32E module.
-
-Observed features:
+Received controller:
 
 - ESP32-WROOM-32E
-- four MOSFET channels
-- channel terminal markings OUT1 to OUT4
-- wide-voltage DC input
-- USB-C power connector
+- four MOSFET output channels
+- NCE6020AK MOSFETs
+- OUT1 to OUT4 screw-terminal outputs
+- 5-60 V marked DC input range
+- onboard conversion for ESP32 power
+- USB-C power input
 - IO0 pushbutton
 - UART programming header
 - exposed ESP32 GPIO footprint
 
-MOSFET marking observed on the board: NCE6020AK.
+The board has two DC input terminals plus four output pairs.
 
-### UART programming header
+### Confirmed output mapping
 
-The board silkscreen identifies:
+| MOSFET output | ESP32 GPIO | Function |
+| --- | ---: | --- |
+| OUT1 | GPIO16 | Red |
+| OUT2 | GPIO17 | Yellow |
+| OUT3 | GPIO26 | Green |
+| OUT4 | GPIO27 | Buzzer |
+
+The mapping has been exercised on the real Andon.
+
+## 3. UART programming header
+
+Silkscreen:
 
 ```text
 5V | TX | RX | GND | GND | IO0
 ```
 
-The six-pin UART header has now been soldered and was used for the successful first flash.
+The six-pin header is soldered and was used for the first successful flash.
 
-### GPIO breakout
+## 4. USB-to-UART adapter
 
-The back of the board exposes standard ESP32 signals including GPIOs, power and ground. These are useful for later additions such as an acknowledge button.
+Silicon Labs CP210x adapter.
 
-### GPIO mapping to verify
-
-The expected mapping for this ESP32 MOS x4 board family is:
-
-| MOSFET output | Expected ESP32 GPIO |
-| --- | ---: |
-| OUT1 | GPIO16 |
-| OUT2 | GPIO17 |
-| OUT3 | GPIO26 |
-| OUT4 | GPIO27 |
-
-Do not treat this mapping as confirmed until it is measured on the received board. Remaining checks:
-
-- verify GPIO16 -> OUT1
-- verify GPIO17 -> OUT2
-- verify GPIO26 -> OUT3
-- verify GPIO27 -> OUT4
-- active-high versus active-low GPIO behavior
-- exact relationship between each OUT+ and OUT- terminal
-- output state during ESP32 reset/boot
-
-## 3. USB-to-UART adapter
-
-The received Silicon Labs CP210x adapter exposes:
+Adapter pins observed:
 
 ```text
 3V3 | GND | +5V | TXD | RXD | DTR
 ```
 
-For initial flashing:
+Programming connection:
 
 ```text
-USB-UART       ESP32
+USB-UART       ESP32 board
 TXD         -> RX
 RXD         -> TX
 GND         -> GND
 ```
 
-Do not connect +5 V or 3.3 V from the UART adapter when the ESP32 board is independently powered.
+Do not connect +5 V or 3.3 V from the UART adapter when the controller is independently powered.
 
-The adapter was detected successfully by Windows as a Silicon Labs CP210x USB-to-UART Bridge on COM7 during bring-up. The UART logic level must remain 3.3 V compatible with the ESP32.
+Windows detected the adapter as a Silicon Labs CP210x USB-to-UART Bridge during bring-up.
 
-## 4. Initial bootloader procedure
-
-1. Turn ESP32 board power off.
-2. Connect USB-UART TXD, RXD and GND.
-3. Hold IO0 to GND.
-4. Apply power to the ESP32 board.
-5. Start firmware flashing.
-6. After flashing, remove power.
-7. Release/remove IO0-to-GND.
-8. Reapply power for normal boot.
-
-The physical IO0 pushbutton may be used instead of a jumper once its behavior is confirmed.
-
-## 5. Proposed Andon connection
-
-Expected low-side topology:
+## 5. Working Andon connection
 
 ```text
 12 V PSU +  ------------------ Brown Andon wire
      |
-     +------------------------ ESP32 board VIN+
+     +------------------------ controller DC input +
 
-12 V PSU 0 V ---------------- ESP32 board GND
+12 V PSU 0 V ---------------- controller GND
 
-ESP32 OUT1 switched low ------ Red
-ESP32 OUT2 switched low ------ Yellow
-ESP32 OUT3 switched low ------ Green
-ESP32 OUT4 switched low ------ Orange / buzzer
+OUT1 switched low ----------- Red
+OUT2 switched low ----------- Yellow
+OUT3 switched low ----------- Green
+OUT4 switched low ----------- Orange / buzzer
 ```
 
-This topology has now been used with the real Andon and controller.
+This topology is physically deployed and working.
 
 ## 6. Power
 
-The lamp is a 12 V device and the controller accepts 12 V input. The assembled setup has now been powered from the board's 12 V DC input, with the same supply powering the ESP32 electronics and the Andon load.
+The current setup uses one 12 V source for:
 
-Before selecting the final supply, measure or obtain:
+- controller input
+- onboard ESP32 power conversion
+- Andon common +12 V
 
-- current with green on
-- current with yellow on
-- current with red on
-- current with buzzer on
-- worst-case current with multiple functions active
+The final demo assembly should still include:
 
-Use a fused supply and appropriate wire/strain relief in the final enclosure.
+- correctly rated fused supply
+- strain relief
+- cable labeling
+- protected enclosure
 
-## 7. Planned additions
+Exact current consumption has not been formally documented yet.
 
-Possible future I/O:
+Useful future measurements:
 
-- acknowledge button
-- reset button
-- local mode selector
-- maintenance/test button
-- external sensor or simulated machine input
+- controller idle current
+- each individual lamp current
+- buzzer current
+- worst-case supported combination
 
+## 7. Confirmed TD-50 multi-color behavior
 
-## 8. Confirmed TD-50 behavior
+Observed on the physical unit:
 
-The real HNTD TD-50 has now been tested with multiple lamp combinations.
+- red + green works
+- yellow + green works
+- red + yellow does not operate correctly together
+- with red + yellow requested, yellow turns off or becomes very faint
+- the behavior follows the red/yellow functions when wires are moved to other MOSFET channels
 
-Observed:
+This rules out one specific MOSFET channel, GPIO or software output as the cause.
 
-- red + green can operate together
-- yellow + green can operate together
-- red + yellow do not operate correctly together
-- with red + yellow requested, yellow becomes off or only very faint
-- the behavior remains when the red/yellow wires are moved to different MOSFET channels
+Project decision:
 
-This channel-swap test localizes the interaction to the Andon itself rather than to one MOSFET channel, GPIO or ESPHome output.
+- semantic modes use one color at a time
+- MANUAL remains available for diagnostics
+- no operational mode depends on red + yellow simultaneously
 
-Operational decision:
+## 8. Boot and output safety
 
-- semantic Andon modes use one color at a time
-- multi-color output remains diagnostic/manual only
-- the firmware does not rely on red + yellow simultaneous indication
+Firmware raw outputs use:
+
+```yaml
+restore_mode: ALWAYS_OFF
+```
+
+A deliberate full power-cycle test should still be documented to confirm that no visible output is energized unexpectedly during boot.
+
+## 9. Possible future I/O
+
+Potential additions:
+
+- physical acknowledge button
+- reset/test button
+- local selector
+- external sensor
+- simulated machine input
+
+These are optional and not required for the current MQTT demonstrator.

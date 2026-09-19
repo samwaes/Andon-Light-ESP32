@@ -2,13 +2,14 @@
 
 ## Purpose
 
-The Andon should remain maintainable in three very different situations:
+The Andon must remain maintainable in several situations:
 
 1. Development at home
 2. Use in an industrial lab on an unfamiliar Wi-Fi network
-3. Recovery after a configuration or network failure
+3. Direct standalone use without Home Assistant
+4. Recovery after a configuration or network failure
 
-No single update mechanism is ideal for all three situations, so the firmware deliberately supports several.
+The design therefore uses several complementary mechanisms.
 
 ## 1. UART serial flashing
 
@@ -30,7 +31,7 @@ GND         -> GND
 
 IO0 is held low during boot to enter the ESP32 bootloader.
 
-UART is the lowest-level recovery path and should always remain documented even when normal updates happen wirelessly.
+Status: first serial flash completed successfully.
 
 ## 2. ESPHome OTA
 
@@ -55,51 +56,101 @@ Use this for:
 - adding/removing features
 - changing known Wi-Fi networks
 - changing local logic
-- updating the web interface configuration
+- updating the local web interface
 
-The YAML in this repository is the source of truth.
+Status: verified working by changing the friendly name and updating wirelessly.
 
-## 3. Fallback Wi-Fi and captive portal
+The YAML in this repository remains the source of truth.
 
-Known Wi-Fi SSIDs are normally compiled into the firmware.
+## 3. Fallback Wi-Fi AP
 
-If none are available, the ESP32 starts a protected fallback access point:
+Known Wi-Fi SSIDs can be compiled into the firmware.
+
+If none are available, the ESP32 should start a protected fallback access point:
 
 ```text
 Andon-Setup
 ```
 
-A phone or laptop can connect to this AP and use the ESPHome captive portal to provision another Wi-Fi network.
-
-This is intended for moving the Andon into a new lab or demo network without reflashing it over UART.
-
-Important distinction:
-
-- captive portal changes the network the device connects to
-- captive portal does not edit the complete ESPHome YAML
-
-## 4. Local web interface
-
-The ESPHome web server provides local status, diagnostics and control.
-
-Planned URL on networks with mDNS support:
+Target fallback address:
 
 ```text
-http://andon-light-01.local
+http://192.168.4.1/
 ```
 
-The interface requires authentication.
+### Design change
 
-It is not a full firmware configuration editor.
+The project will not use ESPHome's captive portal as the main fallback interface.
 
-## 5. Web OTA
+Reason: the fallback interface must do more than provision Wi-Fi. It must also allow direct control of:
 
-The web interface also exposes browser-based OTA.
+- Red
+- Yellow
+- Green
+- Buzzer
+
+The normal ESPHome Web Server will therefore remain the fallback UI.
+
+## 4. Runtime Wi-Fi provisioning
+
+The local web interface will expose:
+
+- New WiFi SSID
+- New WiFi Password
+- Connect & Save WiFi
+
+The button uses ESPHome `wifi.configure`.
+
+Concept:
+
+```yaml
+- wifi.configure:
+    ssid: !lambda 'return id(setup_wifi_ssid).state;'
+    password: !lambda 'return id(setup_wifi_password).state;'
+    save: true
+    timeout: 30s
+```
+
+With `save: true`, the credentials are persisted by ESPHome.
+
+This allows the Andon to be moved to a lab network without UART reflashing.
+
+## 5. Local web interface
+
+The ESPHome Web Server provides:
+
+- direct Andon output controls
+- Wi-Fi provisioning controls
+- device/network status
+- restart control
+- browser-based OTA
+
+Use:
+
+```text
+http://andon-light-01.local/
+```
+
+on a normal network, or:
+
+```text
+http://192.168.4.1/
+```
+
+on the fallback AP.
+
+Use `local: true` so the interface assets are embedded in the ESP32 and remain available with no Internet route.
+
+Authentication is required.
+
+## 6. Web OTA
+
+The local web interface also exposes browser-based OTA.
 
 Workflow:
 
 ```text
-Build firmware.bin elsewhere
+Build firmware.ota.bin
         |
 Open Andon web interface
         |
@@ -108,7 +159,11 @@ Upload firmware image
 ESP32 reboots into new firmware
 ```
 
-This is useful in a lab where the operator has a firmware file but does not have an ESPHome development environment.
+This is useful when the operator has a firmware image but no ESPHome development environment.
+
+Use an OTA firmware image for web OTA, not a factory image.
+
+Status: component is present in the current runtime, but an actual browser OTA update is not yet verified.
 
 ## Decision guide
 
@@ -116,16 +171,35 @@ This is useful in a lab where the operator has a firmware file but does not have
 | --- | --- |
 | First ever flash | UART |
 | Normal firmware development | ESPHome OTA |
-| New/unknown Wi-Fi | Captive portal |
-| Technician has only firmware.bin | Web OTA |
+| New/unknown Wi-Fi | Fallback AP + local web UI + wifi.configure |
+| Standalone control with no LAN | Fallback AP + local web UI |
+| Technician has only OTA firmware image | Web OTA |
 | Wi-Fi/OTA is broken | UART |
-| Change GPIO/MQTT logic | ESPHome OTA or web OTA with rebuilt firmware |
-| Change only Wi-Fi network | Captive portal |
+| Change GPIO/MQTT logic | ESPHome OTA or Web OTA with rebuilt firmware |
+| Change only Wi-Fi network | Local web UI + wifi.configure |
+
+## Secrets model
+
+ESPHome Device Builder normally uses:
+
+```text
+/config/esphome/secrets.yaml
+```
+
+This is separate from Home Assistant's main:
+
+```text
+/config/secrets.yaml
+```
+
+The current device already has API encryption enabled. Preserve the existing API encryption key when replacing the YAML.
+
+The API encryption key is a generated cryptographic key and should not be replaced by an arbitrary password string.
 
 ## MQTT broker portability
 
 Wi-Fi provisioning does not automatically solve MQTT broker discovery.
 
-The MQTT broker hostname remains part of the ESPHome configuration. The preferred demo architecture is therefore to keep a stable broker identity, for example through a portable demo network or consistent DNS name.
+The MQTT broker hostname remains a separate design problem. The preferred demo architecture is to keep a stable broker identity, for example through a portable demo network or consistent DNS name.
 
-This avoids changing firmware simply because the Andon is moved between locations.
+MQTT will be added after the physical outputs and fallback web interface are verified.

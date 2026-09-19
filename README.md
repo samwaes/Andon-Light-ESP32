@@ -1,134 +1,215 @@
 # Andon Light ESP32
 
-Portable ESP32-based Andon light and MQTT/UNS demonstrator.
+Portable ESP32-based industrial Andon demonstrator with local control, Home Assistant integration and runtime-configurable MQTT.
 
-## Project goal
+Last reviewed: 2026-09-19
 
-Build one physical Andon device that can be used in several ways without reflashing the ESP32 for every environment:
+## Current baseline
 
-- Home Assistant via the native ESPHome API
-- Standard MQTT over Wi-Fi, without Home Assistant
-- Industrial lab and UNS demonstrations through an MQTT broker
-- Local device logic so the light still behaves predictably if Home Assistant is unavailable
-- Local web interface for direct Andon control and commissioning
-- Fallback Wi-Fi access point for use when no known network is available
-- Runtime Wi-Fi provisioning from the local web interface
-- Multiple firmware update paths: UART recovery, ESPHome OTA and browser-based web OTA
+Firmware 0.5.0 is deployed and working on the real hardware.
 
-The design principle is to keep the physical device, Home Assistant integration, local fallback control and industrial MQTT namespace separate.
+Verified:
 
-## Current hardware
+- ESP32-WROOM-32E quad-MOSFET controller running from the 12 V supply
+- HNTD TD-50 red/yellow/green tower with buzzer connected and operational
+- GPIO16 -> OUT1 -> red
+- GPIO17 -> OUT2 -> yellow
+- GPIO26 -> OUT3 -> green
+- GPIO27 -> OUT4 -> buzzer
+- local ESPHome Web Server v3 working
+- protected fallback AP called `Andon-Setup`
+- encrypted ESPHome native API working with Home Assistant
+- ESPHome OTA working
+- semantic Andon modes, flash patterns, acknowledge and Buzzer Mute Override working
+- Mosquitto MQTT connection working
+- MQTT broker address, port, username and password configurable from the local web interface without reflashing
+- MQTT listen and publish verified from Home Assistant
+- standard ESPHome MQTT command and state topics working
 
-### Andon light
+Not yet verified:
 
-HNTD TD-50, 12 V DC, three-color LED warning light with buzzer.
+- broker settings after a full power cycle
+- connection to a second MQTT broker
+- operation with Home Assistant deliberately unavailable
+- browser-based Web OTA
+- final fuse, strain relief and enclosure
 
-Observed wiring from the product labels:
+Custom semantic UNS topics are deliberately deferred. The current standard ESPHome MQTT interface is the working project baseline.
+
+## Project objective
+
+The project demonstrates one physical Andon that can be moved between home, lab and industrial environments without changing its basic firmware for every location.
+
+The device supports four separate interaction paths:
+
+```text
+                        ESP32 / ESPHome
+                              |
+          +-------------------+-------------------+
+          |                   |                   |
+   local web UI         ESPHome native API       MQTT
+          |                   |                   |
+ commissioning          Home Assistant        Mosquitto
+ direct control                              other clients
+```
+
+Home Assistant is useful but is not intended to be mandatory for the industrial MQTT path.
+
+## Hardware
+
+### Andon
+
+HNTD TD-50, 12 V DC, constant-light version.
 
 | Wire | Function |
 | --- | --- |
-| Brown | Common +12 V |
-| Red | Red light, switched to 0 V |
-| Yellow | Yellow light, switched to 0 V |
-| Green | Green light, switched to 0 V |
-| Orange | Buzzer, switched to 0 V |
+| Brown | common +12 V |
+| Red | red lamp control |
+| Yellow | yellow lamp control |
+| Green | green lamp control |
+| Orange | buzzer control |
 
-The lamp is the 12 V constant-light version.
+The unit uses a common positive supply and individual low-side control wires.
 
 ### Controller
 
-ESP32-WROOM-32E quad MOSFET switch board.
+ESP32-WROOM-32E quad MOSFET board with NCE6020AK MOSFETs.
 
-Observed on the received board:
+Confirmed mapping:
 
-- 4 MOSFET channels, OUT1 to OUT4
-- N-channel MOSFET low-side switching architecture
-- 5-60 V DC input
-- on-board conversion to power the ESP32 from the DC input
-- USB-C 5 V power input
-- ESP32-WROOM-32E module
-- exposed GPIO headers
-- IO0 boot button
-- separate UART programming header
-- programming header labels: 5V, TX, RX, GND, GND, IO0
-- six-pin UART header now soldered
-
-The expected MOSFET mapping for this board family is currently:
-
-| Output | Expected GPIO | Planned Andon function |
+| Output | ESP32 GPIO | Andon function |
 | --- | ---: | --- |
 | OUT1 | GPIO16 | Red |
 | OUT2 | GPIO17 | Yellow |
 | OUT3 | GPIO26 | Green |
 | OUT4 | GPIO27 | Buzzer |
 
-This mapping still needs physical verification before the Andon is connected.
+The board and Andon are powered from the same 12 V supply.
 
-### USB-to-UART adapter
+See [docs/hardware.md](docs/hardware.md) for the complete hardware record.
 
-Silicon Labs CP210x USB-to-UART adapter, detected by Windows as COM7 during initial bring-up.
+## Andon behavior
 
-Initial programming connection:
+Normal applications use semantic modes rather than direct GPIO control.
 
-```text
-USB-UART            ESP32 board
-TXD       --------> RX
-RXD       --------> TX
-GND       --------> GND
-```
-
-The ESP32 board is powered separately during serial flashing. Do not connect the adapter's 5 V or 3.3 V power pins when the ESP32 board is already powered.
-
-## Target architecture
+Current modes:
 
 ```text
-                         ESP32 / ESPHome
-                              |
-                            Wi-Fi
-                              |
-          +-------------------+-------------------+
-          |                   |                   |
-     ESPHome API            MQTT            Local web UI
-          |                   |                   |
-          v                   v                   v
-   Home Assistant       MQTT broker       Direct control
-                            |
-                 +----------+----------+
-                 |          |          |
-              Node-RED   UNS demo   MQTT Explorer
+OFF
+READY
+RUNNING
+STARTING
+ATTENTION
+WARNING
+URGENT_WARNING
+FAULT
+CRITICAL
+EMERGENCY
+STOPPED
+MAINTENANCE
+MANUAL
 ```
 
-If the ESP32 cannot join a known Wi-Fi network, it exposes a protected fallback AP called `Andon-Setup`. The same local web UI is used for Andon control, Wi-Fi provisioning and, from firmware 0.5.0 onward, runtime MQTT broker configuration. This allows the device to be moved to an industrial environment and pointed at that site's MQTT broker without reflashing.
+The ESP32 translates each mode locally into the required color, flash rate and buzzer pattern.
 
-## MQTT / UNS concept
+Acknowledge silences the audible alarm and changes active warning/fault flashing to steady without clearing the mode.
 
-Initial namespace:
+Buzzer Mute Override suppresses the physical buzzer without changing the process mode or acknowledge state.
+
+See [docs/alarm-philosophy.md](docs/alarm-philosophy.md).
+
+## Known hardware limitation
+
+The real TD-50 has a confirmed internal interaction between red and yellow:
+
+- red + green works
+- yellow + green works
+- red + yellow does not work reliably
+- the behavior follows the Andon function when output channels are swapped
+
+Semantic modes therefore use one color at a time. Multi-color control remains available only for diagnostics.
+
+## Runtime commissioning
+
+### Wi-Fi
+
+The firmware contains the home Wi-Fi as its initial known network.
+
+If that network is unavailable, the device starts:
 
 ```text
-hupla/demo/factory01/line01/andon01/
+Andon-Setup
 ```
 
-Planned logical topics include:
+The local web interface can then be used to enter a new SSID and password through `wifi.configure`.
+
+### MQTT
+
+Firmware 0.5.0 exposes these fields in the local web interface:
+
+- MQTT Broker
+- MQTT Port
+- MQTT Username
+- MQTT Password
+- MQTT Topic Prefix
+- Save & Connect MQTT
+- Disconnect MQTT
+- MQTT Connected
+
+Broker address, port and credentials are applied at runtime. A normal broker change therefore does not require a firmware rebuild.
+
+The Topic Prefix field is currently reserved for a later custom UNS interface. It does not change ESPHome's automatic MQTT topic structure in the current firmware.
+
+## Current MQTT interface
+
+The current working interface is ESPHome's standard MQTT entity mapping.
+
+Examples:
 
 ```text
-.../command/mode
-.../command/outputs
-.../state/mode
-.../state/outputs
-.../status/online
-.../event
+andon-light-01/status
+
+andon-light-01/select/andon_mode/command
+andon-light-01/select/andon_mode/state
+
+andon-light-01/switch/buzzer_mute_override/command
+andon-light-01/switch/buzzer_mute_override/state
+
+andon-light-01/button/acknowledge_alarm/command
 ```
 
-The device should expose semantic states such as:
+Examples of command payloads:
 
-- OFF
-- RUNNING
-- WARNING
-- FAULT
-- STOPPED
-- MAINTENANCE
+```text
+Andon Mode:
+RUNNING
+WARNING
+FAULT
+OFF
 
-instead of requiring external systems to know GPIO numbers.
+Buzzer Mute Override:
+ON
+OFF
+
+Acknowledge Alarm:
+PRESS
+```
+
+Home Assistant MQTT discovery is disabled because Home Assistant already uses the native ESPHome API for its normal entities.
+
+See [docs/mqtt-uns.md](docs/mqtt-uns.md).
+
+## UNS direction
+
+A future version may expose a vendor-neutral semantic namespace such as:
+
+```text
+hupla/demo/factory01/line01/andon01/command/mode
+hupla/demo/factory01/line01/andon01/state/mode
+hupla/demo/factory01/line01/andon01/status/online
+```
+
+This is intentionally not implemented yet. The next UNS work should start from a concrete PLC, MES, SCADA or edge-data demo rather than adding a second MQTT API only for completeness.
 
 ## Repository structure
 
@@ -137,43 +218,34 @@ instead of requiring external systems to know GPIO numbers.
 ├── README.md
 ├── ROADMAP.md
 ├── docs/
-│   ├── architecture.md
-│   ├── hardware.md
-│   ├── firmware.md
-│   ├── mqtt-uns.md
 │   ├── alarm-philosophy.md
-│   ├── update-model.md
+│   ├── architecture.md
+│   ├── bring-up.md
+│   ├── firmware.md
+│   ├── hardware.md
+│   ├── mqtt-uns.md
 │   ├── status.md
-│   └── bring-up.md
+│   └── update-model.md
 └── esphome/
     ├── andon-light.yaml.example
     └── secrets.yaml.example
 ```
 
-## Current status
+The deployed Home Assistant ESPHome file is normally:
 
-As of 2026-09-19:
+```text
+/config/esphome/andon-light-01.yaml
+```
 
-- ESP32-WROOM-32E controller and 12 V HNTD TD-50 Andon are operational
-- GPIO16 / GPIO17 / GPIO26 / GPIO27 drive red / yellow / green / buzzer through the four MOSFET outputs
-- local ESPHome web portal, fallback architecture, encrypted native API and OTA are operational
-- semantic Andon modes, flashing patterns, acknowledge behavior and Buzzer Mute Override are deployed and working
-- the TD-50 red/yellow interaction is confirmed as an internal Andon limitation, so semantic modes use one color at a time
-- firmware 0.5.0 is deployed
-- MQTT broker address, port, username, password and topic prefix can be configured from the Andon web interface without reflashing
-- the device connects successfully to the Home Assistant Mosquitto broker at 192.168.129.15:1883
-- MQTT subscribe/listen and publish control have been verified from Home Assistant
-- standard ESPHome MQTT topics can currently read and change Andon mode, mute and acknowledge behavior
-- custom semantic UNS topics are deliberately deferred for now
+The repository file `esphome/andon-light.yaml.example` is the documented firmware baseline and must never contain real credentials.
 
-Current baseline is therefore a working portable Andon controller with local control, Home Assistant control and standard MQTT control.
+## Next useful validation
 
-Next technical steps, when the project is resumed:
+1. Reboot or power-cycle and verify MQTT broker settings persist.
+2. Change broker settings from the web UI and connect to a second broker without reflashing.
+3. Test the Andon while Home Assistant is deliberately unavailable.
+4. Verify Web OTA.
+5. Finish physical protection with fuse, strain relief and enclosure.
+6. Add custom UNS topics only when needed for a specific industrial integration demonstration.
 
-1. Verify MQTT settings survive a full power cycle.
-2. Point the Andon at a second MQTT broker from the web interface to prove site portability.
-3. Validate standalone operation with Home Assistant unavailable.
-4. Verify browser-based web OTA.
-5. Later, decide whether to add custom semantic MQTT/UNS topics, retained state and birth/last-will conventions.
-
-See [ROADMAP.md](ROADMAP.md) for the implementation plan.
+See [ROADMAP.md](ROADMAP.md).

@@ -47,14 +47,51 @@ Accepted payloads:
 
 ```text
 OFF
+READY
 RUNNING
+STARTING
+ATTENTION
 WARNING
+URGENT_WARNING
 FAULT
+CRITICAL
+EMERGENCY
 STOPPED
 MAINTENANCE
 ```
 
 Retain: no.
+
+### Buzzer mute override
+
+The audible presentation override is separate from the machine/process mode.
+
+```text
+hupla/demo/factory01/line01/andon01/command/buzzer_muted
+```
+
+Payload:
+
+```text
+true
+false
+```
+
+The override must not change the selected mode and must not implicitly acknowledge the alarm.
+
+Proposed retained state:
+
+```text
+hupla/demo/factory01/line01/andon01/state/buzzer_muted
+```
+
+### Alarm acknowledge
+
+```text
+hupla/demo/factory01/line01/andon01/command/acknowledge
+```
+
+An acknowledge command silences the current audible annunciation and makes the active warning/fault color steady, but does not clear the mode.
 
 ### Raw output command
 
@@ -71,7 +108,9 @@ Example:
   "red": false,
   "yellow": true,
   "green": false,
-  "buzzer": false
+  "buzzer": false,
+  "buzzer_muted": true,
+  "acknowledged": false
 }
 ```
 

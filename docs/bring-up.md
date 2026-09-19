@@ -1,28 +1,24 @@
-# First bring-up procedure
+# Bring-up and commissioning status
 
-This procedure deliberately stops before connecting the 12 V Andon.
+## Current state
 
-## Goal
+Core bring-up is complete.
 
-Reach this state first:
+Confirmed on 2026-09-19:
 
-```text
-PC -> USB-UART -> ESP32 -> ESPHome -> Wi-Fi -> OTA -> fallback Wi-Fi recovery
-```
+- UART header soldered
+- Silicon Labs CP210x USB-to-UART adapter detected by Windows
+- first ESPHome flash completed
+- ESP32 online over Wi-Fi
+- encrypted ESPHome native API working
+- OTA update working
+- OTA test performed by changing the friendly name
+- ESPHome 2026.8.2
+- ESP32 rev 3.1, dual core
 
-Only after this works should the MOSFET channels and Andon lamp be connected.
+The 12 V Andon has not yet been connected.
 
-## Step 1 - Solder UART header
-
-Solder a six-pin header into:
-
-```text
-5V | TX | RX | GND | GND | IO0
-```
-
-Inspect for solder bridges before applying power.
-
-## Step 2 - Connect UART
+## Serial recovery wiring
 
 ```text
 USB-UART       ESP32 board
@@ -31,115 +27,141 @@ RXD         -> TX
 GND         -> GND
 ```
 
-Leave these unconnected:
+Leave the UART adapter 5 V, 3.3 V and DTR pins unconnected when the ESP32 board is powered separately.
 
-```text
-USB-UART +5V
-USB-UART 3V3
-USB-UART DTR
-```
-
-Power the ESP32 board independently.
-
-## Step 3 - Enter bootloader
+To enter the serial bootloader:
 
 1. Remove ESP32 power.
 2. Hold IO0 to GND.
 3. Apply ESP32 power.
-4. Start flashing.
+4. Flash firmware.
+5. Remove power after the flash completes.
+6. Remove IO0-to-GND.
+7. Reapply power for normal boot.
 
-If the physical IO0 button proves reliable, it can be used instead of a temporary jumper.
+UART is now considered the recovery method, not the normal update method.
 
-## Step 4 - Flash minimal ESPHome firmware
+## Normal update method
 
-Use the configuration in:
+Use ESPHome OTA from Device Builder.
+
+This has been verified successfully.
+
+## Next test 1 - deploy standalone web fallback
+
+Deploy the firmware baseline in:
 
 ```text
 esphome/andon-light.yaml.example
 ```
 
-Initially, do not configure the MOSFET GPIOs.
+Goals:
 
-## Step 5 - Verify boot
+- authenticated local Web Server v3
+- local assets
+- fallback AP called `Andon-Setup`
+- no captive portal intercepting the fallback UI
+- direct output switches
+- new SSID/password fields
+- `Connect & Save WiFi` button
 
-Expected checks:
+### Verify on normal Wi-Fi
 
-- serial output is readable
-- ESP32 identifies itself normally
-- no repeated resets
-- Wi-Fi connects
-- IP address is assigned
+1. Update wirelessly.
+2. Confirm the device returns online.
+3. Open `http://andon-light-01.local/`.
+4. Confirm the local web interface loads.
+5. Confirm Home Assistant API still connects.
 
-## Step 6 - Verify Home Assistant API
+### Verify fallback AP
 
-If testing at home:
+1. Temporarily make all configured infrastructure Wi-Fi networks unavailable.
+2. Wait for `Andon-Setup` to appear.
+3. Connect a phone or laptop to it.
+4. Browse manually to `http://192.168.4.1/`.
+5. Confirm the same local Andon controls are available.
+6. Enter a test SSID/password.
+7. Press `Connect & Save WiFi`.
+8. Verify the ESP joins the new network.
+9. Reboot and verify the saved Wi-Fi remains available.
 
-- add the ESPHome device to Home Assistant
-- confirm it remains online
-- confirm encrypted native API connectivity
+## Next test 2 - verify Web OTA
 
-## Step 7 - Verify ESPHome OTA
+1. Build an OTA firmware image.
+2. Open the authenticated local web interface.
+3. Use the OTA Update section.
+4. Upload the OTA firmware binary.
+5. Confirm the ESP reboots and returns online.
 
-Make a harmless change to the device configuration and upload over Wi-Fi from ESPHome.
+Do not use a factory image for browser OTA.
 
-Once this works, normal development no longer requires the UART adapter.
+## Next test 3 - map MOSFET outputs
 
-## Step 8 - Verify fallback AP and captive portal
+Expected mapping:
 
-1. Temporarily make the configured Wi-Fi networks unavailable.
-2. Wait for the ESP32 fallback access point to appear.
-3. Connect a phone or laptop to the fallback SSID.
-4. Open the captive portal.
-5. Confirm that a new Wi-Fi network can be selected/provisioned.
-6. Restore the normal test network and verify the ESP32 reconnects.
-
-Do not use a production or sensitive Wi-Fi password for this first test.
-
-## Step 9 - Verify web OTA
-
-1. Open the authenticated ESPHome web interface.
-2. Locate the OTA update section.
-3. Use a harmless precompiled firmware build.
-4. Upload it through the browser.
-5. Confirm the device reboots and reconnects.
-
-UART remains the recovery method if either OTA path fails.
-
-## Step 10 - Map MOSFET outputs
+| Output | Expected GPIO |
+| --- | ---: |
+| OUT1 | GPIO16 |
+| OUT2 | GPIO17 |
+| OUT3 | GPIO26 |
+| OUT4 | GPIO27 |
 
 Do not connect the Andon yet.
 
-Determine which GPIO drives each MOSFET channel.
+For each channel:
 
-For each candidate channel:
+1. Configure the GPIO switch with `restore_mode: ALWAYS_OFF`.
+2. Power the board.
+3. Toggle the output from the local web UI or Home Assistant.
+4. Measure the matching MOSFET terminal with a multimeter.
+5. Confirm the channel turns off again.
+6. Record the verified mapping.
 
-1. Configure only one GPIO.
-2. Boot with output OFF.
-3. Toggle it manually.
-4. Measure OUT+/OUT- with a multimeter or use a safe test load.
-5. Record the result.
-6. Repeat for all four channels.
+## Next test 4 - 12 V power
 
-Update `docs/hardware.md` and the ESPHome configuration with confirmed mappings.
+The final design uses the board's DC input as the single power source.
 
-## Step 11 - 12 V integration
+Target:
 
-After output behavior is understood:
+```text
+12 V PSU
+   |
+   +--> controller DC input
+   |       |
+   |       +--> onboard conversion --> ESP32
+   |
+   +--> Andon common +12 V
+```
 
-1. Power down.
-2. Connect common 0 V between controller and supply.
-3. Connect Andon brown to +12 V.
-4. Connect one light channel only.
-5. Test.
-6. Add remaining channels one at a time.
-7. Test the buzzer last.
+Before connecting the Andon:
+
+1. Disconnect USB-C power.
+2. Connect 12 V DC to the controller's marked DC input.
+3. Verify polarity before applying power.
+4. Apply 12 V.
+5. Confirm the ESP32 boots and reconnects to Wi-Fi.
+6. Confirm OTA/log access still works.
+
+## Next test 5 - connect the Andon
+
+Only after the GPIO and 12 V tests pass:
+
+```text
+Brown   -> +12 V common
+Red     -> verified Red MOSFET output
+Yellow  -> verified Yellow MOSFET output
+Green   -> verified Green MOSFET output
+Orange  -> verified Buzzer MOSFET output
+```
+
+Connect and test one function at a time. Test the buzzer last.
 
 ## Stop conditions
 
 Do not continue if:
 
 - the ESP32 becomes unusually hot
-- the UART adapter is configured for 5 V logic
-- a MOSFET output is active unexpectedly during boot
-- output terminal polarity cannot be established
-- there is uncertainty about the 12 V supply polarity
+- an output activates unexpectedly during boot
+- the 12 V input polarity is uncertain
+- the MOSFET terminal behavior does not match the expected low-side switching
+- the ESP32 fails to boot from the DC input alone

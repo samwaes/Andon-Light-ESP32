@@ -1,33 +1,105 @@
 # Firmware strategy
 
-## Platform
+Last reviewed: 2026-09-19
 
-ESPHome is the firmware framework.
+## Current firmware
 
-Current bring-up status:
+Current deployed baseline:
 
-- first flash successful
-- ESPHome 2026.8.2 running
-- ESP32 rev 3.1 detected
-- encrypted native API operational
-- OTA update operational
-- device online over Wi-Fi
+```text
+0.5.0
+```
 
-The project deliberately separates:
+Platform:
 
-- firmware framework: ESPHome
-- Home Assistant integration: ESPHome native API
-- industrial integration: MQTT
-- physical control: local ESPHome logic
-- fallback commissioning/control: local ESPHome web server
+- ESPHome 2026.8.2
+- ESP32-WROOM-32E
+- ESP-IDF framework
+- encrypted ESPHome native API
+- ESPHome OTA
+- Web Server v3
+- standard MQTT
+- local semantic Andon logic
 
-This allows one ESP32 to work both at home and in an industrial demo without making Home Assistant mandatory.
+Canonical repository baseline:
+
+```text
+esphome/andon-light.yaml.example
+```
+
+Live Home Assistant Device Builder file normally resides at:
+
+```text
+/config/esphome/andon-light-01.yaml
+```
+
+## Design separation
+
+The firmware deliberately separates:
+
+- physical GPIO outputs
+- semantic Andon behavior
+- local web commissioning
+- Home Assistant native API
+- MQTT transport
+- future custom UNS semantics
+
+This keeps the device useful even when Home Assistant is not part of the industrial environment.
+
+## GPIO model
+
+Confirmed mapping:
+
+| Output | GPIO | Function |
+| --- | ---: | --- |
+| OUT1 | GPIO16 | Red |
+| OUT2 | GPIO17 | Yellow |
+| OUT3 | GPIO26 | Green |
+| OUT4 | GPIO27 | Buzzer |
+
+Raw GPIO switches use:
+
+```yaml
+restore_mode: ALWAYS_OFF
+```
+
+They remain visible for manual diagnostics.
+
+## Semantic state model
+
+Current mode options:
+
+```text
+OFF
+READY
+RUNNING
+STARTING
+ATTENTION
+WARNING
+URGENT_WARNING
+FAULT
+CRITICAL
+EMERGENCY
+STOPPED
+MAINTENANCE
+MANUAL
+```
+
+The `render_andon` script runs from a 250 ms timing base and calculates:
+
+- lamp color
+- flash state
+- buzzer state
+- acknowledge behavior
+- mute override
+
+The TD-50 red/yellow hardware limitation is handled by using one semantic lamp color at a time.
+
+See `docs/alarm-philosophy.md`.
 
 ## Home Assistant API
 
-The current device already uses API encryption. Preserve the existing generated API key when changing the configuration.
-
-Target:
+Current configuration intentionally includes:
 
 ```yaml
 api:
@@ -36,11 +108,13 @@ api:
   reboot_timeout: 0s
 ```
 
-`reboot_timeout: 0s` is intentional for the standalone design. Loss of Home Assistant must not cause the Andon controller to reboot.
+The encryption key must be preserved when replacing the live YAML.
 
-## Wi-Fi
+`reboot_timeout: 0s` prevents loss of Home Assistant from forcing an ESP32 reboot.
 
-The device should support one or more known infrastructure networks plus a protected fallback AP.
+## Wi-Fi and fallback
+
+Current baseline:
 
 ```yaml
 wifi:
@@ -48,202 +122,49 @@ wifi:
     - ssid: !secret wifi_home_ssid
       password: !secret wifi_home_password
 
-    - ssid: !secret wifi_demo_ssid
-      password: !secret wifi_demo_password
-
   ap:
     ssid: "Andon-Setup"
     password: !secret fallback_ap_password
     ap_timeout: 20s
 
   reboot_timeout: 0s
+  power_save_mode: none
 ```
 
-### Final fallback design decision
+There is deliberately no `captive_portal:`.
 
-Do not use `captive_portal:` as the primary fallback UI.
-
-Reason: the requirement is not only to provision Wi-Fi, but also to keep direct control of Red, Yellow, Green and Buzzer available when the ESP32 is running only as its own access point.
-
-The next firmware baseline therefore uses:
-
-- fallback AP
-- normal ESPHome Web Server
-- Web Server v3 control entities
-- text fields for new SSID and password
-- `wifi.configure` to connect and persist the new Wi-Fi credentials
-
-Expected fallback workflow:
-
-```text
-No known Wi-Fi
-   |
-Andon-Setup appears
-   |
-connect phone/laptop
-   |
-http://192.168.4.1/
-   |
-control Andon directly
-and/or enter new Wi-Fi
-```
-
-## Local web interface
-
-Use Web Server v3 with local assets:
-
-```yaml
-web_server:
-  port: 80
-  version: 3
-  local: true
-  auth:
-    username: !secret web_username
-    password: !secret web_password
-```
-
-The local assets are important because the fallback AP may have no Internet route.
-
-Planned local UI groups:
-
-1. Andon Controls
-2. WiFi Setup
-3. Device Status
-4. System
-
-The web interface is not a YAML editor. Firmware behavior still comes from this repository.
+The normal Web Server remains available while connected to the fallback AP.
 
 ## Runtime Wi-Fi configuration
 
-ESPHome `wifi.configure` can accept templated SSID and password values and save them persistently.
+The web interface exposes:
 
-Planned action:
+- New WiFi SSID
+- New WiFi Password
+- Connect & Save WiFi
 
-```yaml
-- wifi.configure:
-    ssid: !lambda 'return id(setup_wifi_ssid).state;'
-    password: !lambda 'return id(setup_wifi_password).state;'
-    save: true
-    timeout: 30s
-```
+The button uses `wifi.configure` with `save: true`.
 
-This is intended for demos and commissioning when the Andon is moved to a new network.
+This allows network commissioning without UART reflashing.
 
-## OTA
+## Local web interface
 
-Three update/recovery paths are retained:
+Current groups:
 
-1. ESPHome OTA for normal development
-2. Web Server OTA for browser-based field updates
-3. UART serial flashing for first install and recovery
+1. Andon Mode & Alarm
+2. Manual / Diagnostics
+3. WiFi Setup
+4. MQTT Setup
+5. Device Status
+6. System
 
-The normal development path is now confirmed working.
+Web Server v3 uses embedded local assets so the page remains usable when the fallback AP has no Internet route.
 
-For browser OTA, use an OTA firmware binary, not a factory image.
+The interface uses HTTP Basic Auth. Treat Wi-Fi and MQTT credentials entered through it as commissioning credentials on a trusted local network.
 
-## Framework choice
+## Alarm entities
 
-Keep the framework used by the current working ESPHome device unless there is a reason to change it. Do not change framework and functional behavior in the same troubleshooting step.
-
-The example configuration currently uses ESP-IDF, matching the current ESPHome ESP32 baseline.
-
-## GPIO / output model
-
-Expected board-family mapping:
-
-| Output | Expected GPIO | Planned function |
-| --- | ---: | --- |
-| OUT1 | GPIO16 | Red |
-| OUT2 | GPIO17 | Yellow |
-| OUT3 | GPIO26 | Green |
-| OUT4 | GPIO27 | Buzzer |
-
-This is not yet physically confirmed.
-
-Each output should initially use:
-
-```yaml
-restore_mode: ALWAYS_OFF
-```
-
-so a normal reboot starts with the Andon outputs off.
-
-## State model
-
-The firmware will provide two layers.
-
-### Raw outputs
-
-Four direct switches for commissioning:
-
-- Red
-- Yellow
-- Green
-- Buzzer
-
-These should be available through both the Home Assistant API and the local web server.
-
-### Semantic Andon mode
-
-Normal control will later use a mode:
-
-```text
-OFF
-RUNNING
-WARNING
-FAULT
-STOPPED
-MAINTENANCE
-```
-
-Changing a mode will apply all four physical outputs together.
-
-## MQTT
-
-MQTT is deliberately postponed until the physical outputs and fallback interface are verified.
-
-Later the firmware should:
-
-- connect to a standard MQTT broker
-- keep Home Assistant on the native ESPHome API
-- disable duplicate Home Assistant MQTT entity discovery
-- publish availability
-- subscribe to semantic command topics
-- publish current state as retained messages
-- publish events as non-retained messages
-- republish state after reconnect
-
-## Secrets
-
-The ESPHome secrets file used by Device Builder is normally:
-
-```text
-/config/esphome/secrets.yaml
-```
-
-This is separate from Home Assistant's main:
-
-```text
-/config/secrets.yaml
-```
-
-The existing API encryption key should be preserved. It is a generated cryptographic key, not an arbitrary human password.
-
-The fallback AP password, web username/password and OTA password can be chosen, but existing values should generally be retained when already deployed to avoid breaking connectivity.
-
-## References
-
-- ESPHome MQTT: https://esphome.io/components/mqtt/
-- ESPHome Wi-Fi: https://esphome.io/components/wifi/
-- ESPHome Web Server: https://esphome.io/components/web_server/
-- ESPHome Web OTA: https://esphome.io/components/ota/web_server/
-
-
-## Alarm annunciation layer
-
-Firmware version 0.4.0 adds a semantic annunciation layer above the four raw outputs.
-
-Primary entities exposed to both the ESPHome web interface and Home Assistant:
+Primary semantic entities:
 
 - Andon Mode
 - Buzzer Mute Override
@@ -251,20 +172,18 @@ Primary entities exposed to both the ESPHome web interface and Home Assistant:
 - Clear / OFF
 - Alarm Acknowledged
 
-The raw Red, Yellow, Green and Buzzer switches remain available in a separate Manual / Diagnostics section.
+Diagnostic entities:
 
-The renderer runs every 250 ms and derives the physical outputs from the selected mode, flash phase, acknowledge state and mute override.
+- Manual Red
+- Manual Yellow
+- Manual Green
+- Manual Buzzer
 
-The buzzer mute override has the highest priority over audible behavior. It never changes the selected Andon mode and never acknowledges an alarm.
+## Runtime MQTT provisioning
 
-See `docs/alarm-philosophy.md` for the complete mode table and timing model.
+Firmware 0.5.0 no longer requires the MQTT broker address to be fixed at compile time.
 
-
-## Runtime MQTT provisioning, firmware 0.5.0
-
-The MQTT transport is no longer tied to a broker address compiled into the firmware.
-
-The MQTT client is declared with an empty broker and starts disabled:
+The MQTT component is declared disabled at boot:
 
 ```yaml
 mqtt:
@@ -276,7 +195,9 @@ mqtt:
   reboot_timeout: 0s
 ```
 
-The local web interface exposes persistent fields for:
+On boot the firmware reads the restored runtime fields, applies them to the MQTT client and enables MQTT.
+
+Runtime fields:
 
 - MQTT Broker
 - MQTT Port
@@ -284,31 +205,126 @@ The local web interface exposes persistent fields for:
 - MQTT Password
 - MQTT Topic Prefix
 
-The broker, username and password are initially seeded from ESPHome secrets. Template text and number entities use `restore_value: true`, so site-specific values survive reboot.
+Save & Connect MQTT:
 
-When the operator presses `Save & Connect MQTT`, firmware disables the current MQTT session, applies the runtime values through the MQTT client setters and enables MQTT again.
+1. disables the active MQTT session
+2. applies broker/port/credentials
+3. enables MQTT again
 
-The ESPHome MQTT client API supports runtime setters for broker address, port, username and password, and ESPHome documents `enable_on_boot: false` plus `mqtt.enable` for dynamically negotiated broker addresses.
+The broker can therefore be changed without a firmware rebuild.
 
-This allows the field workflow:
+### Persistence status
+
+The firmware uses `restore_value: true` for the runtime MQTT fields.
+
+The design therefore persists values in ESP flash, but a deliberate full power-cycle verification remains on the roadmap.
+
+## Current MQTT topics
+
+The current working MQTT API is ESPHome's standard entity topic model.
+
+Examples:
 
 ```text
-new industrial site
-  -> configure Wi-Fi
-  -> open Andon web UI
-  -> set site MQTT broker credentials
-  -> Save & Connect MQTT
-  -> verify MQTT Connected
+andon-light-01/status
+
+andon-light-01/select/andon_mode/command
+andon-light-01/select/andon_mode/state
+
+andon-light-01/switch/buzzer_mute_override/command
+andon-light-01/switch/buzzer_mute_override/state
+
+andon-light-01/button/acknowledge_alarm/command
 ```
 
-No firmware rebuild is required for an ordinary broker using TCP and username/password.
+Examples:
 
-### Current security scope
+```text
+publish FAULT to:
+andon-light-01/select/andon_mode/command
 
-Firmware 0.5.0 does not attempt runtime provisioning of CA certificates or mutual-TLS client certificates. Sites requiring MQTT TLS with customer-specific certificate material need an additional design step.
+publish ON to:
+andon-light-01/switch/buzzer_mute_override/command
 
-The local web interface currently uses HTTP basic authentication. MQTT credentials entered there should therefore be treated as demo/lab credentials unless the commissioning network is trusted.
+publish PRESS to:
+andon-light-01/button/acknowledge_alarm/command
+```
 
-### Topic prefix
+This has been validated through Home Assistant's MQTT listen/publish tools.
 
-Firmware 0.5.0 stores a runtime topic-prefix field so the site namespace can be selected without reflashing. Semantic subscriptions/publications using that dynamic prefix are added in the next MQTT phase.
+MQTT discovery remains disabled to avoid duplicate Home Assistant entities because the native API is already present.
+
+## MQTT Topic Prefix field
+
+Firmware 0.5.0 stores:
+
+```text
+hupla/demo/factory01/line01/andon01
+```
+
+as the initial Topic Prefix value.
+
+Important: this field is currently reserved for later custom MQTT/UNS logic. It does not modify the standard ESPHome topic hierarchy in firmware 0.5.0.
+
+Do not describe the custom Hupla topic hierarchy as active until the custom subscriptions/publications are implemented and tested.
+
+## TLS scope
+
+Current runtime provisioning covers ordinary MQTT TCP with username/password.
+
+Customer-specific runtime provisioning of:
+
+- CA certificate
+- client certificate
+- client private key
+- mutual TLS
+
+is not implemented.
+
+## OTA and recovery
+
+Three firmware paths remain:
+
+1. ESPHome OTA for normal development
+2. Web OTA for field update using a compiled OTA binary
+3. UART serial flashing for first install and recovery
+
+ESPHome OTA is verified.
+
+Web OTA is present but still requires a deliberate end-to-end test.
+
+UART was used successfully for the first flash.
+
+## Secrets
+
+Device Builder normally reads:
+
+```text
+/config/esphome/secrets.yaml
+```
+
+This is separate from Home Assistant's main:
+
+```text
+/config/secrets.yaml
+```
+
+Never commit real credentials.
+
+Preserve the existing generated API encryption key and deployed passwords unless intentionally rotating them.
+
+See `esphome/secrets.yaml.example`.
+
+## Future firmware work
+
+Not required for the current baseline:
+
+- custom semantic MQTT/UNS topic subscriptions
+- retained custom state
+- custom birth/last-will topic
+- non-retained event stream
+- dynamic TLS certificate provisioning
+- physical acknowledge button
+- Ethernet variant
+
+These should be added only when a concrete demonstration requires them.

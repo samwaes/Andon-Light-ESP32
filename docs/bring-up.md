@@ -1,22 +1,83 @@
-# Bring-up and commissioning status
+# Bring-up and commissioning record
+
+Last reviewed: 2026-09-19
 
 ## Current state
 
-Core bring-up is complete.
+Core bring-up and functional commissioning are complete.
 
-Confirmed on 2026-09-19:
+Confirmed:
 
 - UART header soldered
-- Silicon Labs CP210x USB-to-UART adapter detected by Windows
+- Silicon Labs CP210x USB-to-UART adapter used successfully
 - first ESPHome flash completed
-- ESP32 online over Wi-Fi
+- ESPHome 2026.8.2 running
+- ESP32 rev 3.1 detected
+- Wi-Fi working
 - encrypted ESPHome native API working
-- OTA update working
-- OTA test performed by changing the friendly name
-- ESPHome 2026.8.2
-- ESP32 rev 3.1, dual core
+- ESPHome OTA working
+- local ESPHome web interface working
+- fallback AP architecture deployed
+- controller and Andon powered from 12 V
+- all four MOSFET channels mapped
+- red, yellow, green and buzzer tested
+- semantic alarm modes tested
+- Buzzer Mute Override and acknowledge tested
+- firmware 0.5.0 deployed
+- Mosquitto connection working
+- MQTT listen and publish tested
 
-The 12 V Andon has not yet been connected.
+The project is no longer in initial electrical bring-up. Remaining work is validation and physical finishing.
+
+## Confirmed output mapping
+
+| Output | GPIO | Function |
+| --- | ---: | --- |
+| OUT1 | GPIO16 | Red |
+| OUT2 | GPIO17 | Yellow |
+| OUT3 | GPIO26 | Green |
+| OUT4 | GPIO27 | Buzzer |
+
+The TD-50 uses brown as common +12 V.
+
+```text
+Brown   -> +12 V common
+Red     -> OUT1 switched low
+Yellow  -> OUT2 switched low
+Green   -> OUT3 switched low
+Orange  -> OUT4 switched low
+```
+
+## Power topology
+
+Current working arrangement:
+
+```text
+12 V PSU
+   |
+   +--> ESP32 MOSFET board DC input
+   |       |
+   |       +--> onboard conversion --> ESP32
+   |
+   +--> Andon common +12 V
+```
+
+The four Andon function wires are switched toward 0 V by the MOSFET channels.
+
+## Known hardware behavior
+
+The real TD-50 does not reliably support red and yellow simultaneously.
+
+Testing showed:
+
+- red + green works
+- yellow + green works
+- red + yellow fails or leaves yellow only faintly lit
+- swapping red/yellow to different MOSFET channels does not change the behavior
+
+The limitation is therefore treated as internal to the Andon.
+
+Semantic modes use one color at a time.
 
 ## Serial recovery wiring
 
@@ -27,141 +88,131 @@ RXD         -> TX
 GND         -> GND
 ```
 
-Leave the UART adapter 5 V, 3.3 V and DTR pins unconnected when the ESP32 board is powered separately.
+Do not connect the UART adapter's 5 V or 3.3 V supply pins when the controller is powered separately.
 
-To enter the serial bootloader:
+### Bootloader procedure
 
-1. Remove ESP32 power.
+1. Remove controller power.
 2. Hold IO0 to GND.
-3. Apply ESP32 power.
+3. Apply controller power.
 4. Flash firmware.
-5. Remove power after the flash completes.
-6. Remove IO0-to-GND.
+5. Remove power.
+6. Release IO0.
 7. Reapply power for normal boot.
 
-UART is now considered the recovery method, not the normal update method.
+UART remains the recovery path, not the normal update path.
 
-## Normal update method
+## Normal firmware update
 
 Use ESPHome OTA from Device Builder.
 
-This has been verified successfully.
+This has been verified and is the preferred development workflow.
 
-## Next test 1 - deploy standalone web fallback
-
-Deploy the firmware baseline in:
+Live configuration normally resides at:
 
 ```text
-esphome/andon-light.yaml.example
+/config/esphome/andon-light-01.yaml
 ```
 
-Goals:
+## Local commissioning
 
-- authenticated local Web Server v3
-- local assets
-- fallback AP called `Andon-Setup`
-- no captive portal intercepting the fallback UI
-- direct output switches
-- new SSID/password fields
-- `Connect & Save WiFi` button
+Normal-network access:
 
-### Verify on normal Wi-Fi
+```text
+http://andon-light-01.local/
+```
 
-1. Update wirelessly.
-2. Confirm the device returns online.
-3. Open `http://andon-light-01.local/`.
-4. Confirm the local web interface loads.
-5. Confirm Home Assistant API still connects.
+Fallback access point:
 
-### Verify fallback AP
+```text
+SSID: Andon-Setup
+Web:  http://192.168.4.1/
+```
 
-1. Temporarily make all configured infrastructure Wi-Fi networks unavailable.
-2. Wait for `Andon-Setup` to appear.
-3. Connect a phone or laptop to it.
-4. Browse manually to `http://192.168.4.1/`.
-5. Confirm the same local Andon controls are available.
-6. Enter a test SSID/password.
-7. Press `Connect & Save WiFi`.
-8. Verify the ESP joins the new network.
-9. Reboot and verify the saved Wi-Fi remains available.
+The web interface includes:
 
-## Next test 2 - verify Web OTA
+- semantic mode
+- mute and acknowledge
+- manual outputs
+- Wi-Fi setup
+- MQTT setup
+- status
+- restart
 
-1. Build an OTA firmware image.
-2. Open the authenticated local web interface.
-3. Use the OTA Update section.
-4. Upload the OTA firmware binary.
-5. Confirm the ESP reboots and returns online.
+## MQTT commissioning
+
+Current home-lab reference broker:
+
+```text
+192.168.129.15:1883
+```
+
+Verified:
+
+- broker connection
+- MQTT listening in Home Assistant
+- MQTT publishing in Home Assistant
+- mode commands
+- mode state
+- buzzer mute
+- acknowledge
+
+The broker can be configured at runtime from the Andon web interface.
+
+## Remaining commissioning tests
+
+### 1. Full power-cycle persistence
+
+Verify after removing 12 V power completely:
+
+- device returns normally
+- outputs do not energize unexpectedly
+- Wi-Fi configuration remains valid
+- MQTT broker configuration remains valid
+- expected mute state is restored
+
+### 2. Second broker
+
+Change broker address, port and credentials through the web UI only.
+
+Verify:
+
+- no firmware rebuild
+- new broker connection succeeds
+- standard ESPHome MQTT topics still work
+
+### 3. Home Assistant independence
+
+Stop or disconnect Home Assistant deliberately.
+
+Verify:
+
+- local web interface remains usable
+- semantic modes still work
+- MQTT remains functional if the broker is still available
+
+### 4. Web OTA
+
+Upload a valid OTA firmware image from the web interface and verify recovery.
 
 Do not use a factory image for browser OTA.
 
-## Next test 3 - map MOSFET outputs
+### 5. Physical finish
 
-Expected mapping:
+Add and document:
 
-| Output | Expected GPIO |
-| --- | ---: |
-| OUT1 | GPIO16 |
-| OUT2 | GPIO17 |
-| OUT3 | GPIO26 |
-| OUT4 | GPIO27 |
+- fuse
+- strain relief
+- enclosure
+- cable labeling
+- final assembly photographs
 
-Do not connect the Andon yet.
+## Stop conditions for future hardware changes
 
-For each channel:
+Stop testing if:
 
-1. Configure the GPIO switch with `restore_mode: ALWAYS_OFF`.
-2. Power the board.
-3. Toggle the output from the local web UI or Home Assistant.
-4. Measure the matching MOSFET terminal with a multimeter.
-5. Confirm the channel turns off again.
-6. Record the verified mapping.
-
-## Next test 4 - 12 V power
-
-The final design uses the board's DC input as the single power source.
-
-Target:
-
-```text
-12 V PSU
-   |
-   +--> controller DC input
-   |       |
-   |       +--> onboard conversion --> ESP32
-   |
-   +--> Andon common +12 V
-```
-
-Before connecting the Andon:
-
-1. Disconnect USB-C power.
-2. Connect 12 V DC to the controller's marked DC input.
-3. Verify polarity before applying power.
-4. Apply 12 V.
-5. Confirm the ESP32 boots and reconnects to Wi-Fi.
-6. Confirm OTA/log access still works.
-
-## Next test 5 - connect the Andon
-
-Only after the GPIO and 12 V tests pass:
-
-```text
-Brown   -> +12 V common
-Red     -> verified Red MOSFET output
-Yellow  -> verified Yellow MOSFET output
-Green   -> verified Green MOSFET output
-Orange  -> verified Buzzer MOSFET output
-```
-
-Connect and test one function at a time. Test the buzzer last.
-
-## Stop conditions
-
-Do not continue if:
-
-- the ESP32 becomes unusually hot
-- an output activates unexpectedly during boot
-- the 12 V input polarity is uncertain
-- the MOSFET terminal behavior does not match the expected low-side switching
-- the ESP32 fails to boot from the DC input alone
+- the ESP32 or board becomes unusually hot
+- an output activates unexpectedly at boot
+- 12 V polarity is uncertain
+- wiring no longer matches the verified low-side topology
+- a new load exceeds the board or power-supply rating

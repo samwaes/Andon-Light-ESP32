@@ -1,184 +1,251 @@
 # Architecture
 
+Last reviewed: 2026-09-19
+
 ## Design objective
 
-The Andon should not be a Home Assistant accessory that happens to speak MQTT. It should be an independent edge device that can participate in multiple environments.
+The Andon is an independent edge device, not a Home Assistant accessory.
 
-The same ESP32 firmware should support:
+The same firmware can currently provide:
 
-1. Local output logic
-2. Home Assistant through the ESPHome native API
-3. Standard MQTT through a broker
-4. Optional browser access for commissioning
-5. OTA firmware updates
-6. Fallback Wi-Fi provisioning through a captive portal
+1. local Andon logic
+2. local browser control and commissioning
+3. Home Assistant integration through the ESPHome native API
+4. standard MQTT through a broker
+5. runtime Wi-Fi provisioning
+6. runtime MQTT broker provisioning
+7. ESPHome OTA and UART recovery
 
-## Logical architecture
+A future UNS interface can be added without changing the basic hardware architecture.
+
+## Current logical architecture
 
 ```text
-                         +----------------------+
-                         | ESP32 / ESPHome      |
-                         |                      |
-                         | local state logic    |
-                         | 4 MOSFET outputs     |
-                         +----------+-----------+
-                                    |
-                                  Wi-Fi
-                                    |
-              +---------------------+---------------------+
-              |                     |                     |
-              v                     v                     v
-      ESPHome native API          MQTT             local web UI
-              |                     |
-              v                     v
-       Home Assistant          MQTT broker
-                                    |
-                       +------------+------------+
-                       |            |            |
-                       v            v            v
-                    Node-RED      UNS        MQTT Explorer
+                         ESP32 / ESPHome
+                 local semantic Andon logic
+                         4 MOSFET outputs
+                              |
+                            Wi-Fi
+                              |
+          +-------------------+-------------------+
+          |                   |                   |
+    local web UI       ESPHome native API        MQTT
+          |                   |                   |
+ commissioning          Home Assistant        Mosquitto
+ direct control              |                   |
+ Wi-Fi setup                 |          any MQTT subscriber
+ MQTT setup                  |          or publisher
 ```
 
-## Interface separation
+The device remains useful even if one control path is unavailable.
+
+## Local behavior
+
+The ESP32 owns the annunciation behavior.
+
+External systems select a semantic mode. The ESP32 determines:
+
+- physical color
+- steady or flashing pattern
+- buzzer pattern
+- acknowledge behavior
+- mute override
+
+This prevents every upstream system from needing to understand GPIO numbers or timing.
+
+See `docs/alarm-philosophy.md`.
+
+## Interfaces
+
+### Local web interface
+
+Current role:
+
+- mode control
+- alarm acknowledge
+- Buzzer Mute Override
+- manual output diagnostics
+- Wi-Fi provisioning
+- MQTT broker provisioning
+- MQTT connection status
+- network/device diagnostics
+- restart
+- Web OTA component
+
+The interface is authenticated with HTTP Basic Auth and is intended for trusted local or commissioning networks.
+
+It is not a YAML editor.
 
 ### ESPHome native API
 
-Purpose:
+Current role:
 
-- best Home Assistant integration
-- device entities
-- logs and diagnostics
-- encrypted control
-- OTA workflow
+- normal Home Assistant integration
+- encrypted entity control
+- status and diagnostics
+- ESPHome development workflow
 
-Home Assistant is optional. The ESP32 should not require an active Home Assistant connection to perform its basic Andon function.
+Home Assistant is optional for the MQTT/industrial use case.
 
 ### MQTT
 
-Purpose:
+Current role:
 
-- portable industrial interface
-- integration with Node-RED, MQTT Explorer, test software, simulators and UNS platforms
-- operation without Home Assistant
+- broker-based control independent of Home Assistant's native API
+- integration with other MQTT clients and tools
+- portable connection to a different broker without firmware rebuild
 
-ESPHome supports MQTT and the native API together. For this project the native API is the Home Assistant control path and custom MQTT topics are the industrial/UNS control path.
+Home Assistant MQTT discovery is disabled. Home Assistant uses the native ESPHome API for its regular entities.
 
-### Local logic
-
-The device should expose semantic modes instead of forcing every client to understand raw outputs.
-
-Initial modes:
-
-| Mode | Red | Yellow | Green | Buzzer |
-| --- | ---: | ---: | ---: | ---: |
-| OFF | 0 | 0 | 0 | 0 |
-| RUNNING | 0 | 0 | 1 | 0 |
-| WARNING | 0 | 1 | 0 | 0 |
-| FAULT | 1 | 0 | 0 | 1 |
-| STOPPED | 1 | 0 | 0 | 0 |
-| MAINTENANCE | 0 | 1 | 0 | 0 |
-
-Raw output control should remain available for diagnostics, but normal applications should use the mode abstraction.
-
-## Home network
-
-Typical flow:
+Current working MQTT topics are ESPHome's standard entity topics, for example:
 
 ```text
-ESP32 -> home Wi-Fi -> Home Assistant native API
-                  \
-                   -> MQTT broker -> MQTT/UNS tools
+andon-light-01/select/andon_mode/command
+andon-light-01/select/andon_mode/state
+
+andon-light-01/switch/buzzer_mute_override/command
+andon-light-01/switch/buzzer_mute_override/state
+
+andon-light-01/button/acknowledge_alarm/command
+
+andon-light-01/status
 ```
 
-## Industrial lab
+The custom Hupla/UNS namespace is not active yet.
 
-Typical flow:
+## Runtime provisioning
+
+### Wi-Fi
+
+The compiled configuration contains the initial home network.
+
+When the device cannot join a known network, it exposes:
 
 ```text
-ESP32 -> lab Wi-Fi -> MQTT broker -> Node-RED / UNS / dashboard
+Andon-Setup
 ```
 
-Home Assistant is not required in this mode.
+The normal ESPHome web server remains available on the fallback AP. The project deliberately does not depend on `captive_portal:`.
 
-## Network portability
+A new SSID and password can be provided through `wifi.configure`.
 
-Wi-Fi and MQTT broker discovery are separate problems.
+### MQTT
 
-ESPHome supports multiple configured Wi-Fi networks, so one firmware can know the home SSID and one or more lab/demo SSIDs.
+Firmware 0.5.0 starts the MQTT component disabled, loads the saved runtime configuration and then enables it.
 
-If none of the configured networks are available, the firmware should start a protected fallback access point. The ESPHome captive portal can then be used from a phone or laptop to provide temporary or replacement Wi-Fi credentials without using the UART programmer.
+Runtime configurable fields:
 
-The MQTT broker address is normally configured as one hostname/IP. Three approaches are possible:
+- broker hostname or IP
+- port
+- username
+- password
+- topic prefix reserved for future custom MQTT/UNS logic
 
-### A. Portable demo network
+The broker can therefore be changed on an industrial site without recompiling the firmware.
 
-Preferred for demonstrations.
+## Home-lab reference configuration
 
-Use a dedicated travel router or demo access point and always provide the same broker hostname/IP.
+Current tested flow:
 
-Advantages:
+```text
+ESP32
+  |
+Wi-Fi
+  |
+192.168.129.15:1883
+  |
+Mosquitto
+  |
+Home Assistant MQTT listen/publish
+```
 
-- predictable
-- independent of customer IT
-- works offline
-- easier troubleshooting
+This home broker is a test environment, not an architectural dependency.
 
-### B. Common DNS hostname
+## Industrial-site flow
 
-Use the same MQTT broker DNS name in every environment and resolve it appropriately.
+Target current workflow:
 
-Advantages:
+```text
+bring Andon to site
+      |
+configure site Wi-Fi
+      |
+open local Andon web UI
+      |
+enter site MQTT broker / port / credentials
+      |
+Save & Connect MQTT
+      |
+test standard MQTT topics
+```
 
-- same firmware
-- no local reconfiguration
+No firmware rebuild is required for a normal TCP broker with username/password.
 
-Constraint: requires DNS/network control.
+Customer-specific TLS certificates or mutual TLS are not runtime-provisioned in the current design.
 
-### C. Fixed remote broker
+## Future UNS architecture
 
-Use an Internet-reachable MQTT broker.
+A later experiment may decouple the Andon from dedicated device commands.
 
-Advantages:
+Example:
 
-- same broker everywhere
+```text
+PLC / MES / SCADA / edge application
+                |
+        OPC UA / MQTT gateway
+                |
+              UNS
+                |
+        +-------+-------+
+        |       |       |
+       MES   dashboard  Andon
+```
 
-Constraints:
+The Andon could then consume operational meaning such as `FAULT` rather than receiving a raw request to switch a lamp.
 
-- depends on Internet
-- industrial networks may block outbound MQTT
-- requires proper TLS and credentials
+Possible future namespace:
 
-For the first lab implementation, option A is the target.
+```text
+hupla/demo/factory01/line01/andon01/
+```
+
+This is a design direction only. It is deliberately not part of firmware 0.5.0.
 
 ## Failure behavior
 
-The device should be designed so that:
+Current design choices:
 
-- loss of Home Assistant does not change the current Andon state
-- loss of MQTT does not reboot the device
-- Wi-Fi loss does not cause outputs to flicker
-- boot starts in a known safe state
-- reconnect publishes current state again
-- MQTT availability reports online/offline through birth and last-will messages
+- `api.reboot_timeout: 0s` so loss of Home Assistant does not reboot the device
+- `mqtt.reboot_timeout: 0s` so loss of the broker does not reboot the device
+- raw GPIO outputs use `restore_mode: ALWAYS_OFF`
+- semantic behavior is calculated locally
+- MQTT can be disconnected or unavailable without removing local web control
+
+Still to verify explicitly:
+
+- behavior through a full power-cycle test
+- operation while Home Assistant is deliberately stopped
+- operation against a second broker
+- reconnect behavior after a real network interruption
+
+## Source of truth
+
+Firmware baseline:
+
+```text
+esphome/andon-light.yaml.example
+```
+
+Live Device Builder configuration normally lives at:
+
+```text
+/config/esphome/andon-light-01.yaml
+```
+
+Real credentials remain only in ESPHome secrets and must never be committed.
 
 ## References
 
-- ESPHome Wi-Fi: https://esphome.io/components/wifi/
 - ESPHome MQTT: https://esphome.io/components/mqtt/
+- ESPHome Wi-Fi: https://esphome.io/components/wifi/
 - ESPHome Web Server: https://esphome.io/components/web_server/
-
-
-## Configuration and update model
-
-The device has four distinct maintenance paths:
-
-| Path | Purpose | Typical use |
-| --- | --- | --- |
-| UART serial flash | Full recovery and first install | First flash, broken Wi-Fi, recovery |
-| ESPHome OTA | Normal firmware/configuration update | Day-to-day development |
-| Captive portal | Change Wi-Fi connection | Unknown lab/customer Wi-Fi |
-| Web OTA | Install a precompiled firmware image | Field maintenance without ESPHome tooling |
-
-The local web UI is not the source editor for the ESPHome YAML. It is primarily a control/diagnostic interface. When web OTA is enabled, it can additionally accept a compiled firmware image.
-
-The canonical source remains the YAML in this repository.

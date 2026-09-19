@@ -1,227 +1,183 @@
 # Roadmap
 
-## Phase 0 - Project baseline
+Last reviewed: 2026-09-19
 
-Status: in progress
+## Current project position
 
-- [x] Select 12 V HNTD TD-50 Andon light
-- [x] Select ESP32 quad MOSFET controller
-- [x] Receive USB-to-UART adapter
-- [x] Define Home Assistant + MQTT + UNS architecture
-- [x] Create project repository and baseline documentation
-- [ ] Photograph and archive the final hardware assembly
-- [ ] Record exact part/vendor references
+The core demonstrator is working.
 
-## Phase 1 - ESP32 bring-up
+Current baseline:
 
-Status: core bring-up complete
+- firmware 0.5.0 deployed
+- physical Andon connected
+- semantic local alarm logic working
+- local web commissioning working
+- Home Assistant native API working
+- Mosquitto connection working
+- standard ESPHome MQTT read/write working
+- runtime MQTT broker reconfiguration available through the web UI
+- custom UNS topic model deferred
 
-- [x] Solder the six-pin UART programming header
-- [x] Detect Silicon Labs CP210x adapter on Windows
-- [x] Connect TXD -> RX, RXD -> TX, GND -> GND
-- [x] Power the ESP32 board independently during serial flashing
-- [x] Enter bootloader mode using IO0
-- [x] Complete first ESPHome flash
-- [x] Join home Wi-Fi
-- [x] Confirm encrypted ESPHome native API
-- [x] Verify ESPHome OTA update using a friendly-name change
-- [ ] Verify browser-based web OTA with a firmware.ota.bin image
-- [ ] Verify UART as a deliberate recovery path
+The roadmap now focuses on validation, portability and later industrial integration rather than basic bring-up.
 
-Observed runtime during successful OTA test:
+## Milestone 1 - Hardware and ESP32 bring-up
 
-- ESPHome 2026.8.2
-- ESP32 rev 3.1, dual core
-- native API handshake successful
-- OTA service available
-- Web Server OTA component loaded
+Status: complete for normal use.
 
-Success criterion achieved for normal development: the ESP32 can now be updated wirelessly without the UART adapter.
+- [x] Select 12 V HNTD TD-50 Andon
+- [x] Select ESP32 quad-MOSFET controller
+- [x] Solder UART programming header
+- [x] Flash ESPHome through CP210x UART
+- [x] Confirm ESPHome 2026.8.2 operation
+- [x] Confirm Wi-Fi
+- [x] Confirm encrypted native API
+- [x] Confirm ESPHome OTA
+- [x] Power controller and Andon from 12 V
+- [x] Verify GPIO16 -> OUT1 -> red
+- [x] Verify GPIO17 -> OUT2 -> yellow
+- [x] Verify GPIO26 -> OUT3 -> green
+- [x] Verify GPIO27 -> OUT4 -> buzzer
+- [x] Confirm the TD-50 red/yellow interaction is internal to the Andon
+- [ ] Verify safe output behavior during a deliberate full power cycle
+- [ ] Add final fuse and strain relief
+- [ ] Photograph and archive the finished assembly
+- [ ] Record final part/vendor references
 
-## Phase 1B - Standalone fallback interface
+## Milestone 2 - Local Andon behavior
 
-Status: web portal tested successfully
+Status: working.
 
-Design decision: use the ESPHome fallback AP and normal local web server together, rather than relying on the captive portal as the primary fallback UI.
+- [x] Direct Red / Yellow / Green / Buzzer controls
+- [x] Semantic mode model
+- [x] 0.5 Hz, 1 Hz and 2 Hz flash patterns
+- [x] Warning/fault buzzer patterns
+- [x] Acknowledge behavior
+- [x] Buzzer Mute Override
+- [x] Manual / Diagnostics mode
+- [x] Use one semantic color at a time because of TD-50 hardware behavior
+- [ ] Explicitly verify mute-state persistence across a full power cycle
+- [ ] Explicitly verify manual buzzer remains suppressed while mute override is enabled
 
-Target behavior:
+## Milestone 3 - Local commissioning and updates
 
-```text
-Known Wi-Fi available
-  -> join normal network
-  -> Home Assistant / local web / later MQTT
+Status: normal web interface working.
 
-No known Wi-Fi available
-  -> start Andon-Setup
-  -> browse to 192.168.4.1
-  -> control Red / Yellow / Green / Buzzer
-  -> enter new SSID + password
-  -> Connect & Save WiFi
-```
+- [x] Authenticated Web Server v3
+- [x] Embedded local web assets
+- [x] Protected fallback AP `Andon-Setup`
+- [x] No captive portal dependency
+- [x] Runtime Wi-Fi fields
+- [x] `Connect & Save WiFi`
+- [x] Restart control
+- [x] ESPHome OTA
+- [x] UART recovery path established
+- [ ] Re-test direct control while connected only to `Andon-Setup`
+- [ ] Verify runtime Wi-Fi credentials after a full power cycle
+- [ ] Verify browser-based Web OTA with an OTA firmware image
+- [ ] Perform one deliberate UART recovery test after the device is fully assembled
 
-- [x] Remove `captive_portal:` from the firmware baseline
-- [x] Enable protected fallback AP `Andon-Setup`
-- [x] Enable authenticated Web Server v3 with local assets
-- [x] Add Red / Yellow / Green / Buzzer controls to the local web UI
-- [x] Add SSID and password fields to the local web UI
-- [x] Add `wifi.configure` action with persistent save
-- [ ] Verify direct control while only connected to the fallback AP
-- [ ] Verify saved Wi-Fi survives reboot
+## Milestone 4 - Home Assistant
 
-## Phase 2 - MOSFET output mapping
+Status: working baseline.
 
-Expected board-family mapping, still to be verified:
+- [x] Native ESPHome API
+- [x] Device available in Home Assistant
+- [x] Semantic Andon Mode
+- [x] Buzzer Mute Override
+- [x] Acknowledge
+- [x] Raw diagnostic outputs
+- [x] MQTT integration available for listen/publish testing
+- [ ] Optional dedicated Home Assistant dashboard card
+- [ ] Deliberately stop Home Assistant and verify the device continues operating independently
 
-| Output | Expected GPIO |
-| --- | ---: |
-| OUT1 | GPIO16 |
-| OUT2 | GPIO17 |
-| OUT3 | GPIO26 |
-| OUT4 | GPIO27 |
+## Milestone 5 - MQTT portability
 
-- [x] Verify GPIO16 -> OUT1
-- [x] Verify GPIO17 -> OUT2
-- [x] Verify GPIO26 -> OUT3
-- [x] Verify GPIO27 -> OUT4
-- [x] Confirm GPIO control drives each MOSFET output correctly
-- [ ] Confirm boot behavior does not energize outputs unexpectedly
-- [ ] Measure output terminals with a multimeter before attaching the Andon
+Status: working home-broker baseline.
 
-Success criterion: all four outputs can be toggled individually and remain OFF during boot unless deliberately commanded.
-
-## Phase 2B - Alarm logic and annunciation
-
-- [x] Define semantic color convention
-- [x] Define 0.5 Hz, 1 Hz and 2 Hz visual flash patterns
-- [x] Define audible patterns for warning/fault severities
-- [x] Define Acknowledge behavior
-- [x] Add global Buzzer Mute Override design
-- [x] Expose mute override to local web UI and Home Assistant
-- [x] Deploy firmware 0.4.0
-- [x] Verify visual flash timing
-- [x] Verify buzzer patterns during semantic-mode testing
-- [x] Verify Acknowledge behavior during semantic-mode testing
-- [ ] Verify mute override survives reboot
-- [ ] Verify mute override suppresses Manual Buzzer
-
-## Phase 3 - Andon integration
-
-Proposed channel allocation:
-
-| Channel | Function |
-| --- | --- |
-| OUT1 | Red |
-| OUT2 | Yellow |
-| OUT3 | Green |
-| OUT4 | Buzzer |
-
-- [x] Verify 12 V DC input powers both the controller and ESP32 in the real setup
-- [x] Connect brown Andon wire to +12 V
-- [x] Connect color/buzzer control wires to switched outputs
-- [x] Verify red
-- [x] Verify yellow
-- [x] Verify green
-- [x] Verify buzzer
-- [x] Test multiple outputs and identify TD-50 internal red/yellow interaction
-- [x] Confirm the red/yellow problem follows the Andon when MOSFET channels are swapped
-- [x] Decide semantic modes will use one color at a time
-- [ ] Add fuse and strain relief for the final demo assembly
-
-## Phase 4 - Home Assistant
-
-- [x] Encrypted ESPHome native API running
-- [x] Device visible and online in ESPHome Device Builder
-- [ ] Add four low-level diagnostic output entities after GPIO verification
-- [x] Define semantic Andon mode control in firmware baseline 0.4.0
-- [x] Deploy and verify semantic Andon mode control
-- [ ] Add Home Assistant dashboard card
-- [x] Verify Buzzer Mute Override in Home Assistant
-- [ ] Verify device remains operational when Home Assistant is stopped
-
-## Phase 5 - MQTT
-
-Home broker baseline:
-
-- [x] Install Mosquitto Broker in Home Assistant
+- [x] Install Mosquitto Broker
 - [x] Create dedicated Andon MQTT credentials
-- [x] Identify Home Assistant LAN broker address: 192.168.129.15
-- [x] Add MQTT secrets to ESPHome
-- [x] Design runtime broker configuration
-- [x] Add firmware 0.5.0 web fields for broker / port / username / password / topic prefix
-- [x] Add Save & Connect MQTT action
-- [x] Add MQTT Connected status
+- [x] Validate broker at `192.168.129.15:1883`
 - [x] Deploy firmware 0.5.0
-- [x] Verify connection to home Mosquitto
-- [ ] Change to a second broker from the web UI without reflashing
-- [ ] Verify broker settings survive reboot
-- [x] Disable duplicate Home Assistant MQTT entity discovery when native API is used
-- [x] Verify standard ESPHome MQTT state and command topics through Home Assistant listen/publish tools
-- [ ] Configure custom semantic MQTT birth and last-will status
-- [ ] Implement custom semantic command topics
-- [ ] Implement retained custom state topics
-- [ ] Verify using MQTT Explorer or another independent MQTT client
-- [ ] Verify using Node-RED
+- [x] Runtime broker hostname/IP field
+- [x] Runtime port field
+- [x] Runtime username/password fields
+- [x] Save & Connect MQTT
+- [x] Disconnect MQTT
+- [x] MQTT Connected status
+- [x] MQTT remains optional and does not force reboot when unavailable
+- [x] Disable Home Assistant MQTT discovery to avoid duplicate entities
+- [x] Verify MQTT listening from Home Assistant
+- [x] Verify MQTT publishing from Home Assistant
+- [x] Verify mode command/state through standard ESPHome MQTT topics
+- [x] Verify Buzzer Mute Override over MQTT
+- [x] Verify Acknowledge over MQTT
+- [ ] Verify persisted broker settings after a full power cycle
+- [ ] Connect to a second MQTT broker from the web UI without reflashing
+- [ ] Test with an MQTT client outside Home Assistant, for example MQTT Explorer
+- [ ] Verify MQTT operation while Home Assistant is offline
 
-Decision 2026-09-19: keep the working standard ESPHome MQTT interface as the current baseline. Custom UNS topics are useful later but are not required for the present demonstrator.
+### Current decision
 
-Portability target:
+Keep the standard ESPHome MQTT interface as the current baseline.
+
+Do not add a second custom MQTT API until a concrete industrial demo needs it.
+
+The runtime Topic Prefix field remains reserved for that later step.
+
+## Milestone 6 - Industrial semantic / UNS experiment
+
+Status: deferred by design.
+
+Possible future scope:
+
+- [ ] Define the concrete producer, for example PLC, MES, SCADA, Node-RED or OPC UA gateway
+- [ ] Define the machine/process state model
+- [ ] Decide whether the Andon consumes a dedicated command topic or shared machine state
+- [ ] Activate the runtime topic prefix
+- [ ] Add custom semantic MQTT subscriptions
+- [ ] Add retained state
+- [ ] Add explicit birth/last-will under the custom namespace
+- [ ] Add non-retained events
+- [ ] Demonstrate one producer feeding multiple consumers
+- [ ] Demonstrate Andon as a physical consumer of shared operational context
+- [ ] Compare plain MQTT with Sparkplug B if useful
+- [ ] Demonstrate OPC UA to MQTT/UNS bridge if useful
+
+Potential namespace:
 
 ```text
-Connect Andon to site Wi-Fi
-  -> open local Andon web UI
-  -> enter MQTT broker hostname/IP
-  -> enter port / username / password
-  -> Save & Connect MQTT
-  -> no ESPHome rebuild or reflash required
+hupla/demo/factory01/line01/andon01/
 ```
 
-Initial runtime provisioning supports ordinary MQTT TCP with username/password. Runtime provisioning of customer CA certificates or mutual-TLS client certificates remains a later advanced feature.
+This milestone should start from a real demonstration question, not from protocol work alone.
 
-## Phase 6 - UNS demonstrator
+## Milestone 7 - Portable demo kit
 
-- [ ] Finalize topic hierarchy
-- [ ] Add machine-state abstraction
-- [ ] Add simulated production asset
-- [ ] Add event messages with reason/source
-- [ ] Add alarm acknowledge input
-- [ ] Demonstrate one-to-many data consumption
-- [ ] Demonstrate operation without Home Assistant
+Status: optional later phase.
 
-Example scenario:
+The Andon no longer requires a portable broker because it can be pointed at a site's existing broker at runtime.
 
-1. Machine simulator reports RUNNING.
-2. Andon shows green.
-3. Machine temperature crosses warning threshold.
-4. A rule publishes WARNING.
-5. Andon shows yellow.
-6. Temperature crosses fault threshold.
-7. A rule publishes FAULT.
-8. Andon shows red and buzzer.
-9. Operator acknowledges alarm.
-10. Buzzer stops while red remains active.
-11. Machine recovers.
-12. Andon returns to green.
+A self-contained demo kit may still be useful where customer IT cannot provide Wi-Fi or MQTT.
 
-## Phase 7 - Portable lab kit
+Possible components:
 
-- [ ] Decide between customer/lab Wi-Fi and dedicated demo Wi-Fi
-- [ ] Build portable MQTT broker
-- [ ] Add compact travel router if needed
-- [ ] Add Node-RED
-- [ ] Add MQTT Explorer or browser dashboard
-- [ ] Document network setup
-- [ ] Create one-command demo startup procedure
-
-Target: the demo can be unpacked and made operational without depending on a customer's Home Assistant installation.
+- travel router
+- local MQTT broker
+- Node-RED
+- MQTT Explorer or browser dashboard
+- simulated PLC or machine
+- OPC UA gateway
+- one-command demo startup procedure
 
 ## Later ideas
 
-- Physical acknowledge/reset button
-- Stack-light test button
+- physical acknowledge/reset button
+- local test button
 - Ethernet-capable controller variant
-- TLS MQTT
-- Sparkplug B comparison
-- OPC UA to MQTT bridge
-- Simulated PLC
-- Edge AI event generation
+- TLS broker support
+- runtime CA/client-certificate provisioning
+- Sparkplug B
+- OPC UA bridge
+- edge AI event generation
+- MES-driven Andon scenario
 - Home Assistant and industrial dashboard side by side

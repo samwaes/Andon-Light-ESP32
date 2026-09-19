@@ -258,3 +258,57 @@ The renderer runs every 250 ms and derives the physical outputs from the selecte
 The buzzer mute override has the highest priority over audible behavior. It never changes the selected Andon mode and never acknowledges an alarm.
 
 See `docs/alarm-philosophy.md` for the complete mode table and timing model.
+
+
+## Runtime MQTT provisioning, firmware 0.5.0
+
+The MQTT transport is no longer tied to a broker address compiled into the firmware.
+
+The MQTT client is declared with an empty broker and starts disabled:
+
+```yaml
+mqtt:
+  id: mqtt_client
+  broker: ""
+  port: 1883
+  enable_on_boot: false
+  discovery: false
+  reboot_timeout: 0s
+```
+
+The local web interface exposes persistent fields for:
+
+- MQTT Broker
+- MQTT Port
+- MQTT Username
+- MQTT Password
+- MQTT Topic Prefix
+
+The broker, username and password are initially seeded from ESPHome secrets. Template text and number entities use `restore_value: true`, so site-specific values survive reboot.
+
+When the operator presses `Save & Connect MQTT`, firmware disables the current MQTT session, applies the runtime values through the MQTT client setters and enables MQTT again.
+
+The ESPHome MQTT client API supports runtime setters for broker address, port, username and password, and ESPHome documents `enable_on_boot: false` plus `mqtt.enable` for dynamically negotiated broker addresses.
+
+This allows the field workflow:
+
+```text
+new industrial site
+  -> configure Wi-Fi
+  -> open Andon web UI
+  -> set site MQTT broker credentials
+  -> Save & Connect MQTT
+  -> verify MQTT Connected
+```
+
+No firmware rebuild is required for an ordinary broker using TCP and username/password.
+
+### Current security scope
+
+Firmware 0.5.0 does not attempt runtime provisioning of CA certificates or mutual-TLS client certificates. Sites requiring MQTT TLS with customer-specific certificate material need an additional design step.
+
+The local web interface currently uses HTTP basic authentication. MQTT credentials entered there should therefore be treated as demo/lab credentials unless the commissioning network is trusted.
+
+### Topic prefix
+
+Firmware 0.5.0 stores a runtime topic-prefix field so the site namespace can be selected without reflashing. Semantic subscriptions/publications using that dynamic prefix are added in the next MQTT phase.

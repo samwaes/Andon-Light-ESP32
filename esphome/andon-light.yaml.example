@@ -7,7 +7,13 @@ esphome:
   friendly_name: ${friendly_name}
   project:
     name: hupla.andon-light
-    version: "0.3.0"
+    version: "0.4.0"
+
+  on_boot:
+    priority: -10
+    then:
+      - delay: 500ms
+      - script.execute: render_andon
 
 esp32:
   board: esp32dev
@@ -17,40 +23,33 @@ esp32:
 logger:
   level: DEBUG
 
-# Home Assistant / ESPHome native API.
-# Preserve the API key already generated for the working device.
 api:
   encryption:
     key: !secret api_encryption_key
   reboot_timeout: 0s
 
-# Normal ESPHome OTA plus browser-based Web OTA.
 ota:
   - platform: esphome
     password: !secret ota_password
-
   - platform: web_server
 
 wifi:
   networks:
     - ssid: !secret wifi_home_ssid
       password: !secret wifi_home_password
-
     - ssid: !secret wifi_demo_ssid
       password: !secret wifi_demo_password
 
-  # Fallback AP for standalone/lab commissioning.
   ap:
     ssid: "Andon-Setup"
     password: !secret fallback_ap_password
     ap_timeout: 20s
 
-  # The device must remain usable as a standalone Andon.
   reboot_timeout: 0s
   power_save_mode: none
 
-# Deliberately no captive_portal here.
-# We want the normal web UI to remain available on the fallback AP.
+# No captive_portal:
+# the normal web UI must remain usable while connected to Andon-Setup.
 
 web_server:
   port: 80
@@ -62,62 +61,204 @@ web_server:
     password: !secret web_password
 
   sorting_groups:
-    - id: group_andon
-      name: "Andon Controls"
+    - id: group_mode
+      name: "Andon Mode & Alarm"
       sorting_weight: 10
+
+    - id: group_manual
+      name: "Manual / Diagnostics"
+      sorting_weight: 20
 
     - id: group_wifi
       name: "WiFi Setup"
-      sorting_weight: 20
+      sorting_weight: 30
 
     - id: group_status
       name: "Device Status"
-      sorting_weight: 30
+      sorting_weight: 40
 
     - id: group_system
       name: "System"
-      sorting_weight: 40
+      sorting_weight: 50
 
-# Expected mapping for this board family.
-# VERIFY all four channels physically before connecting the Andon.
+globals:
+  - id: blink_tick
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: alarm_acknowledged
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+# Physical MOSFET outputs.
+# Semantic modes use only one lamp color at a time because the current
+# HNTD TD-50 has a confirmed internal red/yellow interaction.
 switch:
   - platform: gpio
     pin: GPIO16
     id: andon_red
-    name: "Red"
+    name: "Manual Red"
     restore_mode: ALWAYS_OFF
     web_server:
-      sorting_group_id: group_andon
+      sorting_group_id: group_manual
       sorting_weight: 10
 
   - platform: gpio
     pin: GPIO17
     id: andon_yellow
-    name: "Yellow"
+    name: "Manual Yellow"
     restore_mode: ALWAYS_OFF
     web_server:
-      sorting_group_id: group_andon
+      sorting_group_id: group_manual
       sorting_weight: 20
 
   - platform: gpio
     pin: GPIO26
     id: andon_green
-    name: "Green"
+    name: "Manual Green"
     restore_mode: ALWAYS_OFF
     web_server:
-      sorting_group_id: group_andon
+      sorting_group_id: group_manual
       sorting_weight: 30
 
   - platform: gpio
     pin: GPIO27
     id: andon_buzzer
-    name: "Buzzer"
+    name: "Manual Buzzer"
     restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - if:
+          condition:
+            switch.is_on: buzzer_mute_override
+          then:
+            - switch.turn_off: andon_buzzer
     web_server:
-      sorting_group_id: group_andon
+      sorting_group_id: group_manual
       sorting_weight: 40
 
-# Transient fields used to provision a new Wi-Fi network.
+  # Global demo/commissioning override.
+  # ON means the buzzer is forcibly muted, regardless of the selected mode.
+  - platform: template
+    id: buzzer_mute_override
+    name: "Buzzer Mute Override"
+    icon: "mdi:volume-off"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+
+    turn_on_action:
+      - switch.turn_off: andon_buzzer
+      - script.execute: render_andon
+
+    turn_off_action:
+      - script.execute: render_andon
+
+    web_server:
+      sorting_group_id: group_mode
+      sorting_weight: 20
+
+select:
+  - platform: template
+    id: andon_mode
+    name: "Andon Mode"
+    icon: "mdi:alarm-light"
+    optimistic: true
+    restore_value: false
+    initial_option: "OFF"
+
+    options:
+      - "OFF"
+      - "READY"
+      - "RUNNING"
+      - "STARTING"
+      - "ATTENTION"
+      - "WARNING"
+      - "URGENT_WARNING"
+      - "FAULT"
+      - "CRITICAL"
+      - "EMERGENCY"
+      - "STOPPED"
+      - "MAINTENANCE"
+      - "MANUAL"
+
+    set_action:
+      - lambda: |-
+          id(alarm_acknowledged) = false;
+          id(blink_tick) = 0;
+
+          if (x == "MANUAL") {
+            id(andon_red).turn_off();
+            id(andon_yellow).turn_off();
+            id(andon_green).turn_off();
+            id(andon_buzzer).turn_off();
+          }
+
+      - script.execute: render_andon
+
+    web_server:
+      sorting_group_id: group_mode
+      sorting_weight: 10
+
+button:
+  - platform: template
+    id: acknowledge_alarm
+    name: "Acknowledge Alarm"
+    icon: "mdi:check-circle-outline"
+
+    on_press:
+      - lambda: |-
+          id(alarm_acknowledged) = true;
+      - switch.turn_off: andon_buzzer
+      - script.execute: render_andon
+
+    web_server:
+      sorting_group_id: group_mode
+      sorting_weight: 30
+
+  - platform: template
+    id: clear_andon
+    name: "Clear / OFF"
+    icon: "mdi:power"
+
+    on_press:
+      - select.set:
+          id: andon_mode
+          option: "OFF"
+
+    web_server:
+      sorting_group_id: group_mode
+      sorting_weight: 40
+
+  - platform: template
+    id: connect_new_wifi
+    name: "Connect & Save WiFi"
+
+    web_server:
+      sorting_group_id: group_wifi
+      sorting_weight: 30
+
+    on_press:
+      - logger.log: "Trying user-configured WiFi network"
+      - wifi.configure:
+          ssid: !lambda 'return id(setup_wifi_ssid).state;'
+          password: !lambda 'return id(setup_wifi_password).state;'
+          save: true
+          timeout: 30s
+
+          on_connect:
+            - logger.log: "Connected to new WiFi network"
+
+          on_error:
+            - logger.log: "Failed to connect to new WiFi network"
+
+  - platform: restart
+    name: "Restart Andon Controller"
+
+    web_server:
+      sorting_group_id: group_system
+      sorting_weight: 10
+
 text:
   - platform: template
     id: setup_wifi_ssid
@@ -127,6 +268,7 @@ text:
     max_length: 32
     mode: text
     restore_value: false
+
     web_server:
       sorting_group_id: group_wifi
       sorting_weight: 10
@@ -139,34 +281,21 @@ text:
     max_length: 64
     mode: password
     restore_value: false
+
     web_server:
       sorting_group_id: group_wifi
       sorting_weight: 20
 
-button:
+binary_sensor:
   - platform: template
-    id: connect_new_wifi
-    name: "Connect & Save WiFi"
-    web_server:
-      sorting_group_id: group_wifi
-      sorting_weight: 30
-    on_press:
-      - logger.log: "Trying user-configured WiFi network"
-      - wifi.configure:
-          ssid: !lambda 'return id(setup_wifi_ssid).state;'
-          password: !lambda 'return id(setup_wifi_password).state;'
-          save: true
-          timeout: 30s
-          on_connect:
-            - logger.log: "Connected to new WiFi network"
-          on_error:
-            - logger.log: "Failed to connect to new WiFi network"
+    id: alarm_acknowledged_sensor
+    name: "Alarm Acknowledged"
+    lambda: |-
+      return id(alarm_acknowledged);
 
-  - platform: restart
-    name: "Restart Andon Controller"
     web_server:
-      sorting_group_id: group_system
-      sorting_weight: 10
+      sorting_group_id: group_mode
+      sorting_weight: 50
 
 text_sensor:
   - platform: wifi_info
@@ -209,5 +338,109 @@ sensor:
       sorting_group_id: group_status
       sorting_weight: 60
 
-# MQTT/UNS is intentionally not enabled yet.
-# Add it after the GPIO mapping, 12 V operation and fallback UI are verified.
+# One renderer owns all semantic alarm behavior.
+#
+# Timing base = 250 ms:
+# slow flash   = 0.5 Hz
+# normal flash = 1.0 Hz
+# fast flash   = 2.0 Hz
+#
+# Acknowledge behavior:
+# - stops the audible signal
+# - changes an active warning/fault visual from flashing to steady
+#
+# Buzzer Mute Override:
+# - forcibly disables the buzzer only
+# - does not change the active mode or visual indication
+script:
+  - id: render_andon
+    mode: restart
+
+    then:
+      - lambda: |-
+          auto mode = id(andon_mode).current_option();
+          const int tick = id(blink_tick);
+
+          const bool slow_flash = tick < 4;               // 1s ON / 1s OFF
+          const bool normal_flash = (tick % 4) < 2;       // 0.5s ON / 0.5s OFF
+          const bool fast_flash = (tick % 2) == 0;        // 0.25s ON / 0.25s OFF
+
+          bool red = false;
+          bool yellow = false;
+          bool green = false;
+          bool buzzer = false;
+
+          const bool ack = id(alarm_acknowledged);
+
+          if (mode == "MANUAL") {
+            if (id(buzzer_mute_override).state) {
+              id(andon_buzzer).turn_off();
+            }
+            return;
+          }
+
+          if (mode == "OFF") {
+            // all outputs remain off
+
+          } else if (mode == "READY" || mode == "RUNNING") {
+            green = true;
+
+          } else if (mode == "STARTING") {
+            green = slow_flash;
+
+          } else if (mode == "ATTENTION") {
+            yellow = true;
+
+          } else if (mode == "WARNING") {
+            yellow = ack ? true : slow_flash;
+            buzzer = !ack && (tick == 0);                 // 250 ms every 2 s
+
+          } else if (mode == "URGENT_WARNING") {
+            yellow = ack ? true : normal_flash;
+            buzzer = !ack && ((tick % 4) == 0);           // 250 ms every 1 s
+
+          } else if (mode == "FAULT") {
+            red = ack ? true : normal_flash;
+            buzzer = !ack && normal_flash;                // 500 ms ON / 500 ms OFF
+
+          } else if (mode == "CRITICAL") {
+            red = ack ? true : fast_flash;
+            buzzer = !ack && fast_flash;                  // 250 ms ON / 250 ms OFF
+
+          } else if (mode == "EMERGENCY") {
+            red = ack ? true : fast_flash;
+            buzzer = !ack;                                // continuous until ACK/mute
+
+          } else if (mode == "STOPPED") {
+            red = true;
+
+          } else if (mode == "MAINTENANCE") {
+            yellow = true;
+          }
+
+          // Global demo/commissioning mute always wins.
+          if (id(buzzer_mute_override).state) {
+            buzzer = false;
+          }
+
+          if (red) id(andon_red).turn_on();
+          else id(andon_red).turn_off();
+
+          if (yellow) id(andon_yellow).turn_on();
+          else id(andon_yellow).turn_off();
+
+          if (green) id(andon_green).turn_on();
+          else id(andon_green).turn_off();
+
+          if (buzzer) id(andon_buzzer).turn_on();
+          else id(andon_buzzer).turn_off();
+
+interval:
+  - interval: 250ms
+    then:
+      - lambda: |-
+          id(blink_tick) = (id(blink_tick) + 1) % 8;
+      - script.execute: render_andon
+
+# MQTT/UNS will be added after this local mode/acknowledge/mute model
+# is physically verified.

@@ -40,6 +40,8 @@ Success criterion achieved for normal development: the ESP32 can now be updated 
 
 ## Phase 1B - Standalone fallback interface
 
+Status: web portal tested successfully
+
 Design decision: use the ESPHome fallback AP and normal local web server together, rather than relying on the captive portal as the primary fallback UI.
 
 Target behavior:
@@ -57,12 +59,12 @@ No known Wi-Fi available
   -> Connect & Save WiFi
 ```
 
-- [ ] Remove `captive_portal:` from the next firmware baseline
-- [ ] Enable protected fallback AP `Andon-Setup`
-- [ ] Enable authenticated Web Server v3 with local assets
-- [ ] Add Red / Yellow / Green / Buzzer controls to the local web UI
-- [ ] Add SSID and password fields to the local web UI
-- [ ] Add `wifi.configure` action with persistent save
+- [x] Remove `captive_portal:` from the firmware baseline
+- [x] Enable protected fallback AP `Andon-Setup`
+- [x] Enable authenticated Web Server v3 with local assets
+- [x] Add Red / Yellow / Green / Buzzer controls to the local web UI
+- [x] Add SSID and password fields to the local web UI
+- [x] Add `wifi.configure` action with persistent save
 - [ ] Verify direct control while only connected to the fallback AP
 - [ ] Verify saved Wi-Fi survives reboot
 
@@ -87,6 +89,21 @@ Expected board-family mapping, still to be verified:
 
 Success criterion: all four outputs can be toggled individually and remain OFF during boot unless deliberately commanded.
 
+## Phase 2B - Alarm logic and annunciation
+
+- [x] Define semantic color convention
+- [x] Define 0.5 Hz, 1 Hz and 2 Hz visual flash patterns
+- [x] Define audible patterns for warning/fault severities
+- [x] Define Acknowledge behavior
+- [x] Add global Buzzer Mute Override design
+- [x] Expose mute override to local web UI and Home Assistant
+- [ ] Deploy firmware 0.4.0
+- [ ] Verify visual flash timing
+- [ ] Verify all buzzer patterns
+- [ ] Verify Acknowledge on WARNING / FAULT / CRITICAL / EMERGENCY
+- [ ] Verify mute override survives reboot
+- [ ] Verify mute override suppresses Manual Buzzer
+
 ## Phase 3 - Andon integration
 
 Proposed channel allocation:
@@ -98,14 +115,16 @@ Proposed channel allocation:
 | OUT3 | Green |
 | OUT4 | Buzzer |
 
-- [ ] Verify 12 V DC input powers both the controller and ESP32 in the real setup
-- [ ] Connect brown Andon wire to +12 V
-- [ ] Connect color/buzzer control wires to switched outputs
-- [ ] Verify red
-- [ ] Verify yellow
-- [ ] Verify green
-- [ ] Verify buzzer
-- [ ] Test multiple outputs simultaneously
+- [x] Verify 12 V DC input powers both the controller and ESP32 in the real setup
+- [x] Connect brown Andon wire to +12 V
+- [x] Connect color/buzzer control wires to switched outputs
+- [x] Verify red
+- [x] Verify yellow
+- [x] Verify green
+- [x] Verify buzzer
+- [x] Test multiple outputs and identify TD-50 internal red/yellow interaction
+- [x] Confirm the red/yellow problem follows the Andon when MOSFET channels are swapped
+- [x] Decide semantic modes will use one color at a time
 - [ ] Add fuse and strain relief for the final demo assembly
 
 ## Phase 4 - Home Assistant
@@ -113,8 +132,10 @@ Proposed channel allocation:
 - [x] Encrypted ESPHome native API running
 - [x] Device visible and online in ESPHome Device Builder
 - [ ] Add four low-level diagnostic output entities after GPIO verification
-- [ ] Add semantic Andon mode control
+- [x] Define semantic Andon mode control in firmware baseline 0.4.0
+- [ ] Deploy and verify semantic Andon mode control
 - [ ] Add Home Assistant dashboard card
+- [ ] Verify Buzzer Mute Override in Home Assistant
 - [ ] Verify device remains operational when Home Assistant is stopped
 
 ## Phase 5 - MQTT

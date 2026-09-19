@@ -237,3 +237,24 @@ The fallback AP password, web username/password and OTA password can be chosen, 
 - ESPHome Wi-Fi: https://esphome.io/components/wifi/
 - ESPHome Web Server: https://esphome.io/components/web_server/
 - ESPHome Web OTA: https://esphome.io/components/ota/web_server/
+
+
+## Alarm annunciation layer
+
+Firmware version 0.4.0 adds a semantic annunciation layer above the four raw outputs.
+
+Primary entities exposed to both the ESPHome web interface and Home Assistant:
+
+- Andon Mode
+- Buzzer Mute Override
+- Acknowledge Alarm
+- Clear / OFF
+- Alarm Acknowledged
+
+The raw Red, Yellow, Green and Buzzer switches remain available in a separate Manual / Diagnostics section.
+
+The renderer runs every 250 ms and derives the physical outputs from the selected mode, flash phase, acknowledge state and mute override.
+
+The buzzer mute override has the highest priority over audible behavior. It never changes the selected Andon mode and never acknowledges an alarm.
+
+See `docs/alarm-philosophy.md` for the complete mode table and timing model.

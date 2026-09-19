@@ -2,86 +2,83 @@
 
 ## Working now
 
-- ESP32-WROOM-32E board received
-- UART header soldered
-- Silicon Labs CP210x USB-UART adapter working on Windows
-- first ESPHome flash completed
+- ESP32-WROOM-32E controller operational
+- UART header soldered and serial recovery path proven
 - ESPHome 2026.8.2 running
-- ESP32 rev 3.1 identified
-- Wi-Fi connection working
-- encrypted ESPHome native API working
-- OTA update working
-- OTA verified by changing the friendly name and uploading wirelessly
-- ESPHome Web OTA component present in runtime
+- Wi-Fi and encrypted native API working
+- ESPHome OTA working
+- local ESPHome web portal tested successfully
+- fallback/local web architecture implemented
+- controller and Andon running from the 12 V setup
+- red, yellow, green and buzzer individually controllable
+- TD-50 internal red/yellow interaction isolated by swapping output channels
 
-## Not connected yet
+## Confirmed Andon hardware limitation
 
-- 12 V Andon
-- MQTT broker
-- UNS namespace
+The HNTD TD-50 does not reliably support red + yellow simultaneously.
 
-## Hardware checks still required
+The problem follows the Andon function when the wires are moved to other MOSFET outputs, which rules out one specific MOSFET channel as the cause.
 
-Expected MOSFET mapping:
+Firmware design consequence:
 
-| Output | Expected GPIO | Planned load |
-| --- | ---: | --- |
-| OUT1 | GPIO16 | Red |
-| OUT2 | GPIO17 | Yellow |
-| OUT3 | GPIO26 | Green |
-| OUT4 | GPIO27 | Buzzer |
+- semantic modes use one color at a time
+- manual multi-color control remains diagnostic only
 
-This mapping is still unverified on the actual board.
+## Firmware 0.4.0 target
 
-The next physical test is to run from the board's 12 V DC input and verify that:
+New semantic controls:
 
-1. the ESP32 boots from that one supply
-2. each GPIO drives the expected MOSFET channel
-3. outputs remain off during boot
-4. the Andon can then be attached one channel at a time
+- Andon Mode
+- Buzzer Mute Override
+- Acknowledge Alarm
+- Clear / OFF
+- Alarm Acknowledged state
+- Manual Red / Yellow / Green / Buzzer
 
-## Latest fallback-interface decision
-
-The goal is a standalone Andon controller that remains usable without Home Assistant or an existing LAN.
-
-Next firmware target:
+Mode set:
 
 ```text
-Normal network available
-    |
-    +--> ESPHome API --> Home Assistant
-    +--> local web UI
-    +--> later MQTT / UNS
-
-No known network available
-    |
-    +--> Andon-Setup fallback AP
-           |
-           +--> local web UI at 192.168.4.1
-                  |
-                  +--> Red / Yellow / Green / Buzzer
-                  +--> New WiFi SSID
-                  +--> New WiFi Password
-                  +--> Connect & Save WiFi
-                  +--> Web OTA
+OFF
+READY
+RUNNING
+STARTING
+ATTENTION
+WARNING
+URGENT_WARNING
+FAULT
+CRITICAL
+EMERGENCY
+STOPPED
+MAINTENANCE
+MANUAL
 ```
 
-The project therefore moves away from using the captive portal as the main fallback UI. The normal ESPHome Web Server will be kept available on the fallback AP, and `wifi.configure` will be used for runtime Wi-Fi provisioning.
+Flash patterns:
 
-## Secrets
+- slow: 0.5 Hz
+- normal: 1 Hz
+- fast: 2 Hz
 
-Current API logs confirm encryption is already active. Preserve the existing generated API encryption key.
+Acknowledge:
 
-ESPHome Device Builder normally uses:
+- stops audible indication
+- converts active warning/fault flashing to steady
+- does not clear the mode
 
-```text
-/config/esphome/secrets.yaml
-```
+Buzzer Mute Override:
 
-This is separate from:
+- forcibly disables the buzzer
+- leaves visual mode unchanged
+- leaves acknowledge state unchanged
+- is available in both local web UI and Home Assistant
+- is restored across reboot for demo convenience
 
-```text
-/config/secrets.yaml
-```
+## Next tests
 
-used by Home Assistant itself.
+1. Deploy firmware 0.4.0.
+2. Verify mode selector appears in both web UI and Home Assistant.
+3. Verify mute override appears and suppresses every buzzer pattern.
+4. Verify mute survives reboot.
+5. Verify WARNING, FAULT, CRITICAL and EMERGENCY timing.
+6. Verify Acknowledge transitions flashing alarm to steady visual.
+7. Add MQTT/UNS after local behavior is stable.

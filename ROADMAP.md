@@ -79,11 +79,11 @@ Expected board-family mapping, still to be verified:
 | OUT3 | GPIO26 |
 | OUT4 | GPIO27 |
 
-- [ ] Verify GPIO16 -> OUT1
-- [ ] Verify GPIO17 -> OUT2
-- [ ] Verify GPIO26 -> OUT3
-- [ ] Verify GPIO27 -> OUT4
-- [ ] Confirm whether GPIO high means MOSFET ON
+- [x] Verify GPIO16 -> OUT1
+- [x] Verify GPIO17 -> OUT2
+- [x] Verify GPIO26 -> OUT3
+- [x] Verify GPIO27 -> OUT4
+- [x] Confirm GPIO control drives each MOSFET output correctly
 - [ ] Confirm boot behavior does not energize outputs unexpectedly
 - [ ] Measure output terminals with a multimeter before attaching the Andon
 
@@ -97,10 +97,10 @@ Success criterion: all four outputs can be toggled individually and remain OFF d
 - [x] Define Acknowledge behavior
 - [x] Add global Buzzer Mute Override design
 - [x] Expose mute override to local web UI and Home Assistant
-- [ ] Deploy firmware 0.4.0
-- [ ] Verify visual flash timing
-- [ ] Verify all buzzer patterns
-- [ ] Verify Acknowledge on WARNING / FAULT / CRITICAL / EMERGENCY
+- [x] Deploy firmware 0.4.0
+- [x] Verify visual flash timing
+- [x] Verify buzzer patterns during semantic-mode testing
+- [x] Verify Acknowledge behavior during semantic-mode testing
 - [ ] Verify mute override survives reboot
 - [ ] Verify mute override suppresses Manual Buzzer
 
@@ -133,9 +133,9 @@ Proposed channel allocation:
 - [x] Device visible and online in ESPHome Device Builder
 - [ ] Add four low-level diagnostic output entities after GPIO verification
 - [x] Define semantic Andon mode control in firmware baseline 0.4.0
-- [ ] Deploy and verify semantic Andon mode control
+- [x] Deploy and verify semantic Andon mode control
 - [ ] Add Home Assistant dashboard card
-- [ ] Verify Buzzer Mute Override in Home Assistant
+- [x] Verify Buzzer Mute Override in Home Assistant
 - [ ] Verify device remains operational when Home Assistant is stopped
 
 ## Phase 5 - MQTT
@@ -150,16 +150,19 @@ Home broker baseline:
 - [x] Add firmware 0.5.0 web fields for broker / port / username / password / topic prefix
 - [x] Add Save & Connect MQTT action
 - [x] Add MQTT Connected status
-- [ ] Deploy firmware 0.5.0
-- [ ] Verify connection to home Mosquitto
+- [x] Deploy firmware 0.5.0
+- [x] Verify connection to home Mosquitto
 - [ ] Change to a second broker from the web UI without reflashing
 - [ ] Verify broker settings survive reboot
-- [ ] Disable duplicate Home Assistant MQTT entity discovery when native API is used
-- [ ] Configure semantic MQTT birth and last-will status
-- [ ] Implement custom command topics
-- [ ] Implement retained state topics
-- [ ] Verify using MQTT Explorer
+- [x] Disable duplicate Home Assistant MQTT entity discovery when native API is used
+- [x] Verify standard ESPHome MQTT state and command topics through Home Assistant listen/publish tools
+- [ ] Configure custom semantic MQTT birth and last-will status
+- [ ] Implement custom semantic command topics
+- [ ] Implement retained custom state topics
+- [ ] Verify using MQTT Explorer or another independent MQTT client
 - [ ] Verify using Node-RED
+
+Decision 2026-09-19: keep the working standard ESPHome MQTT interface as the current baseline. Custom UNS topics are useful later but are not required for the present demonstrator.
 
 Portability target:
 

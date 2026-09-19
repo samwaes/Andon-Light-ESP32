@@ -1,15 +1,18 @@
 # Update and provisioning model
 
+Last reviewed: 2026-09-19
+
 ## Purpose
 
-The Andon must remain maintainable in several situations:
+The device must remain usable in several situations:
 
-1. Development at home
-2. Use in an industrial lab on an unfamiliar Wi-Fi network
-3. Direct standalone use without Home Assistant
-4. Recovery after a configuration or network failure
+1. normal development at home
+2. commissioning on a new Wi-Fi network
+3. connection to a new MQTT broker
+4. standalone local control
+5. recovery after network or firmware failure
 
-The design therefore uses several complementary mechanisms.
+The current design provides a separate path for each need.
 
 ## 1. UART serial flashing
 
@@ -18,7 +21,7 @@ Use for:
 - first installation
 - recovery when Wi-Fi is unavailable
 - recovery when OTA is broken
-- low-level debugging
+- low-level troubleshooting
 
 Connection:
 
@@ -35,171 +38,173 @@ Status: first serial flash completed successfully.
 
 ## 2. ESPHome OTA
 
-This is the normal development method.
+Normal firmware-development path.
 
-Workflow:
+Use it when changing:
 
-```text
-Edit YAML
-   |
-Compile with ESPHome
-   |
-Upload over Wi-Fi
-   |
-ESP32 reboots into new firmware
-```
+- GPIO logic
+- semantic Andon behavior
+- MQTT implementation
+- custom topic subscriptions/publications
+- web-interface structure
+- framework/components
+- compiled defaults
 
-Use this for:
+Status: verified working.
 
-- GPIO changes
-- MQTT changes
-- adding/removing features
-- changing known Wi-Fi networks
-- changing local logic
-- updating the local web interface
+## 3. Fallback AP and local web UI
 
-Status: verified working by changing the friendly name and updating wirelessly.
-
-The YAML in this repository remains the source of truth.
-
-## 3. Fallback Wi-Fi AP
-
-Known Wi-Fi SSIDs can be compiled into the firmware.
-
-If none are available, the ESP32 should start a protected fallback access point:
+If no known Wi-Fi network is available, the device exposes:
 
 ```text
 Andon-Setup
 ```
 
-Target fallback address:
+Expected local address:
 
 ```text
 http://192.168.4.1/
 ```
 
-### Design change
+The project deliberately does not depend on ESPHome `captive_portal:`.
 
-The project will not use ESPHome's captive portal as the main fallback interface.
-
-Reason: the fallback interface must do more than provision Wi-Fi. It must also allow direct control of:
-
-- Red
-- Yellow
-- Green
-- Buzzer
-
-The normal ESPHome Web Server will therefore remain the fallback UI.
+The normal Web Server is the fallback interface because commissioning also requires access to Andon controls and MQTT settings.
 
 ## 4. Runtime Wi-Fi provisioning
 
-The local web interface will expose:
+The web interface exposes:
 
 - New WiFi SSID
 - New WiFi Password
 - Connect & Save WiFi
 
-The button uses ESPHome `wifi.configure`.
+This uses `wifi.configure` with `save: true`.
 
-Concept:
+A new Wi-Fi network therefore does not require a firmware rebuild.
 
-```yaml
-- wifi.configure:
-    ssid: !lambda 'return id(setup_wifi_ssid).state;'
-    password: !lambda 'return id(setup_wifi_password).state;'
-    save: true
-    timeout: 30s
-```
+## 5. Runtime MQTT provisioning
 
-With `save: true`, the credentials are persisted by ESPHome.
+Firmware 0.5.0 exposes:
 
-This allows the Andon to be moved to a lab network without UART reflashing.
+- MQTT Broker
+- MQTT Port
+- MQTT Username
+- MQTT Password
+- MQTT Topic Prefix
+- Save & Connect MQTT
+- Disconnect MQTT
 
-## 5. Local web interface
+Broker address, port and credentials can be changed without reflashing.
 
-The ESPHome Web Server provides:
+The MQTT values use ESPHome restore storage.
 
-- direct Andon output controls
-- Wi-Fi provisioning controls
-- device/network status
-- restart control
-- browser-based OTA
+A deliberate full power-cycle persistence test is still outstanding.
 
-Use:
+### Topic Prefix limitation
+
+The Topic Prefix value is stored, but custom Hupla/UNS topic logic is not implemented yet.
+
+Changing Topic Prefix therefore does not currently change ESPHome's automatic MQTT topic names.
+
+## 6. Local web interface
+
+Normal-network access:
 
 ```text
 http://andon-light-01.local/
 ```
 
-on a normal network, or:
+Fallback access:
 
 ```text
 http://192.168.4.1/
 ```
 
-on the fallback AP.
+Current functions:
 
-Use `local: true` so the interface assets are embedded in the ESP32 and remain available with no Internet route.
+- semantic Andon control
+- alarm acknowledge
+- buzzer mute
+- raw diagnostics
+- Wi-Fi provisioning
+- MQTT provisioning
+- device/network status
+- restart
+- Web OTA component
 
 Authentication is required.
 
-## 6. Web OTA
+The interface uses HTTP rather than HTTPS, so commissioning credentials should be used only on a trusted local network.
 
-The local web interface also exposes browser-based OTA.
+## 7. Web OTA
+
+Web OTA is included as a field-maintenance path.
 
 Workflow:
 
 ```text
-Build firmware.ota.bin
+build OTA firmware image
         |
-Open Andon web interface
+open local Andon web UI
         |
-Upload firmware image
+upload OTA image
         |
-ESP32 reboots into new firmware
+device reboots
 ```
 
-This is useful when the operator has a firmware image but no ESPHome development environment.
+Use an OTA firmware image, not a factory image.
 
-Use an OTA firmware image for web OTA, not a factory image.
-
-Status: component is present in the current runtime, but an actual browser OTA update is not yet verified.
+Status: component present, full browser OTA flow not yet deliberately verified.
 
 ## Decision guide
 
-| Situation | Recommended method |
+| Situation | Method |
 | --- | --- |
-| First ever flash | UART |
-| Normal firmware development | ESPHome OTA |
-| New/unknown Wi-Fi | Fallback AP + local web UI + wifi.configure |
-| Standalone control with no LAN | Fallback AP + local web UI |
-| Technician has only OTA firmware image | Web OTA |
-| Wi-Fi/OTA is broken | UART |
-| Change GPIO/MQTT logic | ESPHome OTA or Web OTA with rebuilt firmware |
-| Change only Wi-Fi network | Local web UI + wifi.configure |
+| First flash | UART |
+| Normal firmware change | ESPHome OTA |
+| Unknown Wi-Fi | fallback AP + local web UI |
+| Change Wi-Fi credentials | local web UI + `wifi.configure` |
+| Change MQTT broker/IP | local web UI |
+| Change MQTT port/login | local web UI |
+| Change current standard ESPHome MQTT payload/state | MQTT client, no firmware update |
+| Add custom MQTT/UNS topics | firmware update |
+| Change flash/buzzer behavior | firmware update |
+| Add TLS certificate logic | firmware update |
+| Technician has only compiled OTA image | Web OTA |
+| Wi-Fi/OTA broken | UART |
 
 ## Secrets model
 
-ESPHome Device Builder normally uses:
+ESPHome Device Builder secrets:
 
 ```text
 /config/esphome/secrets.yaml
 ```
 
-This is separate from Home Assistant's main:
+Home Assistant main secrets:
 
 ```text
 /config/secrets.yaml
 ```
 
-The current device already has API encryption enabled. Preserve the existing API encryption key when replacing the YAML.
+These are separate files.
 
-The API encryption key is a generated cryptographic key and should not be replaced by an arbitrary password string.
+Preserve the deployed API encryption key. It is generated cryptographic material, not a normal password.
 
-## MQTT broker portability
+Never store real credentials in this repository.
 
-Wi-Fi provisioning does not automatically solve MQTT broker discovery.
+## Source of truth
 
-The MQTT broker hostname remains a separate design problem. The preferred demo architecture is to keep a stable broker identity, for example through a portable demo network or consistent DNS name.
+Repository firmware baseline:
 
-MQTT will be added after the physical outputs and fallback web interface are verified.
+```text
+esphome/andon-light.yaml.example
+```
+
+Live Device Builder YAML:
+
+```text
+/config/esphome/andon-light-01.yaml
+```
+
+The repository should describe the deployed baseline accurately, while secret values remain outside Git.

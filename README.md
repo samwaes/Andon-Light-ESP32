@@ -141,6 +141,7 @@ instead of requiring external systems to know GPIO numbers.
 │   ├── hardware.md
 │   ├── firmware.md
 │   ├── mqtt-uns.md
+│   ├── alarm-philosophy.md
 │   ├── update-model.md
 │   ├── status.md
 │   └── bring-up.md
@@ -162,20 +163,22 @@ As of 2026-09-19:
 - UART programming header soldered
 - 12 V Andon not yet connected
 - MOSFET GPIO mapping not yet physically verified
+- local web portal tested successfully
+- 12 V board/Andon operation tested
+- Andon light connected and controllable
+- internal TD-50 red/yellow interaction confirmed by swapping MOSFET channels; this is treated as an Andon hardware limitation
 - MQTT/UNS not yet configured
-- current firmware still has the standard captive-portal behavior from initial bring-up
-- next firmware revision will move to fallback AP + local web server + runtime Wi-Fi configuration so direct Andon control remains available without Home Assistant
+- next firmware revision adds semantic Andon modes, flashing patterns, acknowledge behavior and a persistent Buzzer Mute Override
 
 Next technical steps:
 
-1. Deploy and test the local fallback web interface.
-2. Verify `Andon-Setup` and runtime Wi-Fi configuration.
-3. Verify browser-based web OTA.
-4. Verify GPIO16/17/26/27 against OUT1/OUT2/OUT3/OUT4 with a multimeter.
-5. Power the board from 12 V DC and verify that the same supply powers the ESP32.
-6. Connect the Andon one channel at a time.
-7. Add semantic Andon modes.
-8. Add MQTT and the UNS topic model.
-9. Validate standalone operation with Home Assistant disconnected.
+1. Deploy firmware 0.4.0 with semantic Andon modes and alarm patterns.
+2. Verify slow/normal/fast flashing on the real Andon.
+3. Verify Acknowledge behavior.
+4. Verify Buzzer Mute Override in both the local web UI and Home Assistant.
+5. Verify Manual mode for diagnostics.
+6. Verify browser-based web OTA.
+7. Add MQTT and the UNS topic model, including separate alarm, acknowledge and mute states.
+8. Validate standalone operation with Home Assistant disconnected.
 
 See [ROADMAP.md](ROADMAP.md) for the implementation plan.

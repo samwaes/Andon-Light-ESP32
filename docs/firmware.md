@@ -4,37 +4,43 @@
 
 ESPHome is the firmware framework.
 
+Current bring-up status:
+
+- first flash successful
+- ESPHome 2026.8.2 running
+- ESP32 rev 3.1 detected
+- encrypted native API operational
+- OTA update operational
+- device online over Wi-Fi
+
 The project deliberately separates:
 
 - firmware framework: ESPHome
 - Home Assistant integration: ESPHome native API
 - industrial integration: MQTT
 - physical control: local ESPHome logic
+- fallback commissioning/control: local ESPHome web server
 
 This allows one ESP32 to work both at home and in an industrial demo without making Home Assistant mandatory.
 
-## Connectivity stack
+## Home Assistant API
 
-Target configuration:
+The current device already uses API encryption. Preserve the existing generated API key when changing the configuration.
+
+Target:
 
 ```yaml
 api:
   encryption:
     key: !secret api_encryption_key
-
-mqtt:
-  broker: !secret mqtt_broker
-  username: !secret mqtt_username
-  password: !secret mqtt_password
-  discovery: false
-  discover_ip: true
+  reboot_timeout: 0s
 ```
 
-ESPHome currently documents using the native API and MQTT together. When Home Assistant connects over the native API, MQTT entity discovery can be disabled to avoid duplicate entities while MQTT remains available for industrial/UNS messaging.
+`reboot_timeout: 0s` is intentional for the standalone design. Loss of Home Assistant must not cause the Andon controller to reboot.
 
 ## Wi-Fi
 
-Use multiple known networks:
+The device should support one or more known infrastructure networks plus a protected fallback AP.
 
 ```yaml
 wifi:
@@ -46,65 +52,140 @@ wifi:
       password: !secret wifi_demo_password
 
   ap:
-    ssid: !secret fallback_ap_ssid
+    ssid: "Andon-Setup"
     password: !secret fallback_ap_password
+    ap_timeout: 20s
 
-captive_portal:
+  reboot_timeout: 0s
 ```
 
-Do not hard-code credentials in the main YAML committed to GitHub.
+### Final fallback design decision
 
-## Framework choice
+Do not use `captive_portal:` as the primary fallback UI.
 
-Start with the Arduino framework for the first MQTT/ESPHome implementation. MQTT under ESP-IDF is currently documented by ESPHome as experimental.
+Reason: the requirement is not only to provision Wi-Fi, but also to keep direct control of Red, Yellow, Green and Buzzer available when the ESP32 is running only as its own access point.
 
-This can be reconsidered later if another ESP-IDF-specific feature becomes necessary.
+The next firmware baseline therefore uses:
+
+- fallback AP
+- normal ESPHome Web Server
+- Web Server v3 control entities
+- text fields for new SSID and password
+- `wifi.configure` to connect and persist the new Wi-Fi credentials
+
+Expected fallback workflow:
+
+```text
+No known Wi-Fi
+   |
+Andon-Setup appears
+   |
+connect phone/laptop
+   |
+http://192.168.4.1/
+   |
+control Andon directly
+and/or enter new Wi-Fi
+```
+
+## Local web interface
+
+Use Web Server v3 with local assets:
+
+```yaml
+web_server:
+  port: 80
+  version: 3
+  local: true
+  auth:
+    username: !secret web_username
+    password: !secret web_password
+```
+
+The local assets are important because the fallback AP may have no Internet route.
+
+Planned local UI groups:
+
+1. Andon Controls
+2. WiFi Setup
+3. Device Status
+4. System
+
+The web interface is not a YAML editor. Firmware behavior still comes from this repository.
+
+## Runtime Wi-Fi configuration
+
+ESPHome `wifi.configure` can accept templated SSID and password values and save them persistently.
+
+Planned action:
+
+```yaml
+- wifi.configure:
+    ssid: !lambda 'return id(setup_wifi_ssid).state;'
+    password: !lambda 'return id(setup_wifi_password).state;'
+    save: true
+    timeout: 30s
+```
+
+This is intended for demos and commissioning when the Andon is moved to a new network.
 
 ## OTA
 
-After the first UART flash, normal firmware updates should happen over Wi-Fi.
+Three update/recovery paths are retained:
 
-Two OTA paths are planned:
+1. ESPHome OTA for normal development
+2. Web Server OTA for browser-based field updates
+3. UART serial flashing for first install and recovery
 
-1. ESPHome OTA for normal development from the YAML source.
-2. Web-server OTA for field updates using a precompiled firmware image.
+The normal development path is now confirmed working.
 
-UART is retained as the recovery method if networking or OTA becomes unusable.
+For browser OTA, use an OTA firmware binary, not a factory image.
 
-The normal web interface does not edit the YAML source. Configuration changes such as GPIO logic, MQTT behavior or known SSIDs still belong in the repository and require a firmware rebuild. Wi-Fi credentials are the exception because the captive portal can provision a network at runtime.
+## Framework choice
 
-## Web interface
+Keep the framework used by the current working ESPHome device unless there is a reason to change it. Do not change framework and functional behavior in the same troubleshooting step.
 
-A local ESPHome web server may be added for commissioning and demonstrations.
+The example configuration currently uses ESP-IDF, matching the current ESPHome ESP32 baseline.
 
-The web server is enabled for commissioning and demonstrations.
+## GPIO / output model
 
-Requirements:
+Expected board-family mapping:
 
-- require authentication
-- prefer local embedded assets if offline operation is needed
-- do not treat it as the main industrial interface
-- avoid exposing it directly to untrusted networks
-- enable web OTA so a compiled firmware image can be installed without ESPHome tooling
+| Output | Expected GPIO | Planned function |
+| --- | ---: | --- |
+| OUT1 | GPIO16 | Red |
+| OUT2 | GPIO17 | Yellow |
+| OUT3 | GPIO26 | Green |
+| OUT4 | GPIO27 | Buzzer |
+
+This is not yet physically confirmed.
+
+Each output should initially use:
+
+```yaml
+restore_mode: ALWAYS_OFF
+```
+
+so a normal reboot starts with the Andon outputs off.
 
 ## State model
 
-The firmware should eventually provide two layers.
+The firmware will provide two layers.
 
 ### Raw outputs
 
 Four direct switches for commissioning:
 
-- output 1
-- output 2
-- output 3
-- output 4
+- Red
+- Yellow
+- Green
+- Buzzer
 
-These remain diagnostic entities.
+These should be available through both the Home Assistant API and the local web server.
 
 ### Semantic Andon mode
 
-Normal control uses a mode:
+Normal control will later use a mode:
 
 ```text
 OFF
@@ -115,38 +196,44 @@ STOPPED
 MAINTENANCE
 ```
 
-Changing a mode applies all four physical outputs together.
+Changing a mode will apply all four physical outputs together.
 
-## Boot behavior
+## MQTT
 
-Requirements:
+MQTT is deliberately postponed until the physical outputs and fallback interface are verified.
 
-1. All outputs start in a known state.
-2. No unintended lamp or buzzer pulse occurs during reset.
-3. Last state restoration is not enabled until output boot behavior has been verified.
-4. Initial development should default to all outputs OFF.
-
-## MQTT behavior
-
-The firmware should:
+Later the firmware should:
 
 - connect to a standard MQTT broker
+- keep Home Assistant on the native ESPHome API
+- disable duplicate Home Assistant MQTT entity discovery
 - publish availability
 - subscribe to semantic command topics
 - publish current state as retained messages
 - publish events as non-retained messages
 - republish state after reconnect
 
-## GPIO mapping
+## Secrets
 
-Not yet known.
+The ESPHome secrets file used by Device Builder is normally:
 
-Do not copy arbitrary ESP32 GPIO examples into the live configuration. The quad-MOS board has its own hardwired GPIO-to-MOSFET mapping.
+```text
+/config/esphome/secrets.yaml
+```
 
-The first test firmware should identify one channel at a time and update the documentation when confirmed.
+This is separate from Home Assistant's main:
+
+```text
+/config/secrets.yaml
+```
+
+The existing API encryption key should be preserved. It is a generated cryptographic key, not an arbitrary human password.
+
+The fallback AP password, web username/password and OTA password can be chosen, but existing values should generally be retained when already deployed to avoid breaking connectivity.
 
 ## References
 
 - ESPHome MQTT: https://esphome.io/components/mqtt/
 - ESPHome Wi-Fi: https://esphome.io/components/wifi/
 - ESPHome Web Server: https://esphome.io/components/web_server/
+- ESPHome Web OTA: https://esphome.io/components/ota/web_server/

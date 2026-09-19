@@ -98,7 +98,7 @@ The ESP32 board is powered separately during serial flashing. Do not connect the
               Node-RED   UNS demo   MQTT Explorer
 ```
 
-If the ESP32 cannot join a known Wi-Fi network, it will eventually expose a protected fallback AP called `Andon-Setup`. The design target is to keep the same local web UI available on that AP so the four outputs can still be controlled and new Wi-Fi credentials can be entered.
+If the ESP32 cannot join a known Wi-Fi network, it exposes a protected fallback AP called `Andon-Setup`. The same local web UI is used for Andon control, Wi-Fi provisioning and, from firmware 0.5.0 onward, runtime MQTT broker configuration. This allows the device to be moved to an industrial environment and pointed at that site's MQTT broker without reflashing.
 
 ## MQTT / UNS concept
 
@@ -167,18 +167,21 @@ As of 2026-09-19:
 - 12 V board/Andon operation tested
 - Andon light connected and controllable
 - internal TD-50 red/yellow interaction confirmed by swapping MOSFET channels; this is treated as an Andon hardware limitation
-- MQTT/UNS not yet configured
-- next firmware revision adds semantic Andon modes, flashing patterns, acknowledge behavior and a persistent Buzzer Mute Override
+- semantic Andon modes, flashing patterns, acknowledge behavior and Buzzer Mute Override tested and working
+- Home Assistant Mosquitto broker installed at the home lab
+- MQTT credentials added to ESPHome secrets
+- firmware 0.5.0 adds runtime MQTT broker configuration through the Andon web interface
+- semantic MQTT command/state topics are the next step
 
 Next technical steps:
 
-1. Deploy firmware 0.4.0 with semantic Andon modes and alarm patterns.
-2. Verify slow/normal/fast flashing on the real Andon.
-3. Verify Acknowledge behavior.
-4. Verify Buzzer Mute Override in both the local web UI and Home Assistant.
-5. Verify Manual mode for diagnostics.
-6. Verify browser-based web OTA.
-7. Add MQTT and the UNS topic model, including separate alarm, acknowledge and mute states.
+1. Deploy firmware 0.5.0 with runtime MQTT configuration.
+2. Verify the home Mosquitto broker at 192.168.129.15.
+3. Change broker/port/credentials from the Andon web interface without reflashing.
+4. Verify the saved broker settings survive reboot.
+5. Test against a second MQTT broker to prove portability.
+6. Add semantic MQTT command/state topics for mode, acknowledge and buzzer mute.
+7. Verify browser-based web OTA.
 8. Validate standalone operation with Home Assistant disconnected.
 
 See [ROADMAP.md](ROADMAP.md) for the implementation plan.

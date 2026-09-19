@@ -3,106 +3,77 @@
 ## Working now
 
 - ESP32-WROOM-32E controller operational
-- UART header soldered and serial recovery path proven
-- ESPHome 2026.8.2 running
-- Wi-Fi and encrypted native API working
+- HNTD TD-50 Andon powered from the 12 V setup
+- GPIO16 / GPIO17 / GPIO26 / GPIO27 mapped to red / yellow / green / buzzer
+- Wi-Fi and encrypted ESPHome native API working
 - ESPHome OTA working
 - local ESPHome web portal tested successfully
 - fallback/local web architecture implemented
-- controller and Andon running from the 12 V setup
-- red, yellow, green and buzzer individually controllable
-- TD-50 internal red/yellow interaction isolated by swapping output channels
+- semantic modes, flash patterns, alarm acknowledge and Buzzer Mute Override working
+- TD-50 internal red/yellow interaction confirmed as an Andon hardware limitation
 
-## Confirmed Andon hardware limitation
+## Firmware 0.5.0
 
-The HNTD TD-50 does not reliably support red + yellow simultaneously.
+Firmware 0.5.0 is deployed and working.
 
-The problem follows the Andon function when the wires are moved to other MOSFET outputs, which rules out one specific MOSFET channel as the cause.
+The local web portal now allows runtime MQTT configuration of:
 
-Firmware design consequence:
+- broker hostname or IP address
+- port
+- username
+- password
+- topic prefix
+- Save & Connect MQTT
+- Disconnect MQTT
+- MQTT Connected status
 
-- semantic modes use one color at a time
-- manual multi-color control remains diagnostic only
+The intention is field portability: at an industrial site the Andon can join the local Wi-Fi and be pointed at that site's MQTT broker without recompiling or reflashing firmware.
 
-## Firmware 0.4.0 status
+## MQTT validation
 
-New semantic controls:
-
-- Andon Mode
-- Buzzer Mute Override
-- Acknowledge Alarm
-- Clear / OFF
-- Alarm Acknowledged state
-- Manual Red / Yellow / Green / Buzzer
-
-Mode set:
-
-```text
-OFF
-READY
-RUNNING
-STARTING
-ATTENTION
-WARNING
-URGENT_WARNING
-FAULT
-CRITICAL
-EMERGENCY
-STOPPED
-MAINTENANCE
-MANUAL
-```
-
-Flash patterns:
-
-- slow: 0.5 Hz
-- normal: 1 Hz
-- fast: 2 Hz
-
-Acknowledge:
-
-- stops audible indication
-- converts active warning/fault flashing to steady
-- does not clear the mode
-
-Buzzer Mute Override:
-
-- forcibly disables the buzzer
-- leaves visual mode unchanged
-- leaves acknowledge state unchanged
-- is available in both local web UI and Home Assistant
-- is restored across reboot for demo convenience
-
-The semantic mode/alarm functions have now been deployed and are working.
-
-## MQTT / firmware 0.5.0
-
-Home Assistant Mosquitto is installed and running. The broker is reachable on the home LAN at:
+Home Assistant Mosquitto is installed and running at:
 
 ```text
 192.168.129.15:1883
 ```
 
-Dedicated Andon MQTT credentials have been added to ESPHome secrets.
+The Andon connects successfully with its dedicated MQTT credentials.
 
-Firmware 0.5.0 adds runtime MQTT provisioning to the existing local web portal:
+Verified on 2026-09-19:
 
-- MQTT Broker
-- MQTT Port
-- MQTT Username
-- MQTT Password
-- MQTT Topic Prefix
-- Save & Connect MQTT
-- Disconnect MQTT
-- MQTT Connected status
+- MQTT connection succeeds
+- Home Assistant can listen to Andon MQTT traffic
+- Home Assistant can publish MQTT commands
+- Andon mode can be changed over the standard ESPHome MQTT command topic
+- current state is published back over the corresponding ESPHome state topic
+- Buzzer Mute Override can be controlled over MQTT
+- Acknowledge can be triggered over MQTT
+- Home Assistant MQTT discovery remains disabled to avoid duplicate entities beside the native ESPHome API
 
-The fields are stored in ESP flash so broker configuration can follow the Andon to an industrial site without rebuilding firmware.
+The current working interface is the standard ESPHome MQTT topic structure. The planned custom `hupla/demo/factory01/...` semantic UNS topic structure is deliberately deferred.
 
-## Next tests
+## Current project position
 
-1. Deploy and validate firmware 0.5.0.
-2. Confirm MQTT connection to 192.168.129.15.
-3. Change MQTT configuration from the local web portal.
-4. Reboot and verify the settings persist.
-5. Test with a second broker.
-6. Add semantic command/state topics after the runtime transport is proven.
+The demonstrator now proves three independent control paths:
+
+```text
+Local Andon web UI
+        |
+Home Assistant native ESPHome API
+        |
+Standard MQTT through Mosquitto
+        |
+      ESP32
+        |
+   Andon tower
+```
+
+This is sufficient as the present baseline. The next UNS layer should only be added when it supports a concrete demo scenario rather than as extra protocol work by itself.
+
+## Later validation
+
+1. Verify persisted MQTT settings after a full power cycle.
+2. Change broker configuration from the web portal and connect to a second broker without reflashing.
+3. Validate operation while Home Assistant is unavailable.
+4. Verify browser-based web OTA.
+5. Later decide on custom semantic topics, retained state, birth/last-will and a fuller UNS demo.

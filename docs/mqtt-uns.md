@@ -8,6 +8,22 @@ The MQTT model should represent industrial meaning, not ESP32 implementation det
 
 A client should be able to request FAULT without knowing which GPIO controls the red lamp or buzzer.
 
+## Runtime broker provisioning
+
+Firmware 0.5.0 separates broker configuration from the compiled firmware.
+
+The local Andon web interface stores:
+
+- broker hostname or IP
+- broker port
+- username
+- password
+- topic prefix
+
+The operator can therefore move the device to another industrial MQTT environment without reflashing it.
+
+Current scope is MQTT TCP with optional username/password. Dynamic TLS certificate provisioning is not yet implemented.
+
 ## Namespace
 
 Initial development namespace:

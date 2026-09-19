@@ -24,7 +24,7 @@ Firmware design consequence:
 - semantic modes use one color at a time
 - manual multi-color control remains diagnostic only
 
-## Firmware 0.4.0 target
+## Firmware 0.4.0 status
 
 New semantic controls:
 
@@ -73,12 +73,36 @@ Buzzer Mute Override:
 - is available in both local web UI and Home Assistant
 - is restored across reboot for demo convenience
 
+The semantic mode/alarm functions have now been deployed and are working.
+
+## MQTT / firmware 0.5.0
+
+Home Assistant Mosquitto is installed and running. The broker is reachable on the home LAN at:
+
+```text
+192.168.129.15:1883
+```
+
+Dedicated Andon MQTT credentials have been added to ESPHome secrets.
+
+Firmware 0.5.0 adds runtime MQTT provisioning to the existing local web portal:
+
+- MQTT Broker
+- MQTT Port
+- MQTT Username
+- MQTT Password
+- MQTT Topic Prefix
+- Save & Connect MQTT
+- Disconnect MQTT
+- MQTT Connected status
+
+The fields are stored in ESP flash so broker configuration can follow the Andon to an industrial site without rebuilding firmware.
+
 ## Next tests
 
-1. Deploy firmware 0.4.0.
-2. Verify mode selector appears in both web UI and Home Assistant.
-3. Verify mute override appears and suppresses every buzzer pattern.
-4. Verify mute survives reboot.
-5. Verify WARNING, FAULT, CRITICAL and EMERGENCY timing.
-6. Verify Acknowledge transitions flashing alarm to steady visual.
-7. Add MQTT/UNS after local behavior is stable.
+1. Deploy and validate firmware 0.5.0.
+2. Confirm MQTT connection to 192.168.129.15.
+3. Change MQTT configuration from the local web portal.
+4. Reboot and verify the settings persist.
+5. Test with a second broker.
+6. Add semantic command/state topics after the runtime transport is proven.

@@ -126,11 +126,11 @@ ESP32 OUT3 switched low ------ Green
 ESP32 OUT4 switched low ------ Orange / buzzer
 ```
 
-This is a target diagram, not yet a verified wiring instruction. Before connecting the lamp, verify the MOSFET terminals with a multimeter.
+This topology has now been used with the real Andon and controller.
 
 ## 6. Power
 
-The lamp is a 12 V device and the controller accepts 12 V input. The board includes its own DC conversion for the ESP32, so the intended final demonstrator uses one 12 V DC supply for both the controller electronics and the Andon load. This still needs to be verified on the assembled hardware before the lamp is connected.
+The lamp is a 12 V device and the controller accepts 12 V input. The assembled setup has now been powered from the board's 12 V DC input, with the same supply powering the ESP32 electronics and the Andon load.
 
 Before selecting the final supply, measure or obtain:
 
@@ -151,3 +151,24 @@ Possible future I/O:
 - local mode selector
 - maintenance/test button
 - external sensor or simulated machine input
+
+
+## 8. Confirmed TD-50 behavior
+
+The real HNTD TD-50 has now been tested with multiple lamp combinations.
+
+Observed:
+
+- red + green can operate together
+- yellow + green can operate together
+- red + yellow do not operate correctly together
+- with red + yellow requested, yellow becomes off or only very faint
+- the behavior remains when the red/yellow wires are moved to different MOSFET channels
+
+This channel-swap test localizes the interaction to the Andon itself rather than to one MOSFET channel, GPIO or ESPHome output.
+
+Operational decision:
+
+- semantic Andon modes use one color at a time
+- multi-color output remains diagnostic/manual only
+- the firmware does not rely on red + yellow simultaneous indication

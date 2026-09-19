@@ -140,13 +140,39 @@ Proposed channel allocation:
 
 ## Phase 5 - MQTT
 
-- [ ] Connect ESPHome to Mosquitto
+Home broker baseline:
+
+- [x] Install Mosquitto Broker in Home Assistant
+- [x] Create dedicated Andon MQTT credentials
+- [x] Identify Home Assistant LAN broker address: 192.168.129.15
+- [x] Add MQTT secrets to ESPHome
+- [x] Design runtime broker configuration
+- [x] Add firmware 0.5.0 web fields for broker / port / username / password / topic prefix
+- [x] Add Save & Connect MQTT action
+- [x] Add MQTT Connected status
+- [ ] Deploy firmware 0.5.0
+- [ ] Verify connection to home Mosquitto
+- [ ] Change to a second broker from the web UI without reflashing
+- [ ] Verify broker settings survive reboot
 - [ ] Disable duplicate Home Assistant MQTT entity discovery when native API is used
-- [ ] Configure MQTT birth and last-will status
+- [ ] Configure semantic MQTT birth and last-will status
 - [ ] Implement custom command topics
 - [ ] Implement retained state topics
 - [ ] Verify using MQTT Explorer
 - [ ] Verify using Node-RED
+
+Portability target:
+
+```text
+Connect Andon to site Wi-Fi
+  -> open local Andon web UI
+  -> enter MQTT broker hostname/IP
+  -> enter port / username / password
+  -> Save & Connect MQTT
+  -> no ESPHome rebuild or reflash required
+```
+
+Initial runtime provisioning supports ordinary MQTT TCP with username/password. Runtime provisioning of customer CA certificates or mutual-TLS client certificates remains a later advanced feature.
 
 ## Phase 6 - UNS demonstrator
 

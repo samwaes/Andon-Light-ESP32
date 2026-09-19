@@ -1,29 +1,34 @@
 substitutions:
   device_name: andon-light-01
-  friendly_name: Andon Light 01
-  mqtt_prefix: hupla/demo/factory01/line01/andon01
+  friendly_name: "Andon Light 01"
 
 esphome:
   name: ${device_name}
   friendly_name: ${friendly_name}
   project:
     name: hupla.andon-light
-    version: "0.2.0"
+    version: "0.3.0"
 
 esp32:
   board: esp32dev
   framework:
-    type: arduino
+    type: esp-idf
 
 logger:
+  level: DEBUG
 
+# Home Assistant / ESPHome native API.
+# Preserve the API key already generated for the working device.
 api:
   encryption:
     key: !secret api_encryption_key
+  reboot_timeout: 0s
 
+# Normal ESPHome OTA plus browser-based Web OTA.
 ota:
   - platform: esphome
     password: !secret ota_password
+
   - platform: web_server
 
 wifi:
@@ -34,54 +39,175 @@ wifi:
     - ssid: !secret wifi_demo_ssid
       password: !secret wifi_demo_password
 
-  # If no known network is available, expose a protected setup AP.
+  # Fallback AP for standalone/lab commissioning.
   ap:
-    ssid: !secret fallback_ap_ssid
+    ssid: "Andon-Setup"
     password: !secret fallback_ap_password
+    ap_timeout: 20s
 
-captive_portal:
+  # The device must remain usable as a standalone Andon.
+  reboot_timeout: 0s
+  power_save_mode: none
 
-mqtt:
-  broker: !secret mqtt_broker
-  port: 1883
-  username: !secret mqtt_username
-  password: !secret mqtt_password
+# Deliberately no captive_portal here.
+# We want the normal web UI to remain available on the fallback AP.
 
-  # Home Assistant will use the native ESPHome API.
-  # Keep MQTT available for the industrial/UNS interface.
-  discovery: false
-  discover_ip: true
-
-  birth_message:
-    topic: ${mqtt_prefix}/status/online
-    payload: online
-    retain: true
-
-  will_message:
-    topic: ${mqtt_prefix}/status/online
-    payload: offline
-    retain: true
-
-# Local commissioning and diagnostic UI.
-# Web OTA accepts a compiled firmware image. It does not edit this YAML.
 web_server:
   port: 80
   version: 3
   local: true
+
   auth:
     username: !secret web_username
     password: !secret web_password
 
-# GPIO-to-MOSFET mapping is intentionally NOT configured yet.
-# The received board must be tested first.
-#
-# Once confirmed, add four GPIO switches/outputs and map them to:
-# OUT1 -> Red
-# OUT2 -> Yellow
-# OUT3 -> Green
-# OUT4 -> Buzzer
-#
-# Also verify whether the GPIO output needs inverted: true.
+  sorting_groups:
+    - id: group_andon
+      name: "Andon Controls"
+      sorting_weight: 10
 
-# Custom semantic MQTT handling will be added after the physical
-# output mapping is confirmed.
+    - id: group_wifi
+      name: "WiFi Setup"
+      sorting_weight: 20
+
+    - id: group_status
+      name: "Device Status"
+      sorting_weight: 30
+
+    - id: group_system
+      name: "System"
+      sorting_weight: 40
+
+# Expected mapping for this board family.
+# VERIFY all four channels physically before connecting the Andon.
+switch:
+  - platform: gpio
+    pin: GPIO16
+    id: andon_red
+    name: "Red"
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: group_andon
+      sorting_weight: 10
+
+  - platform: gpio
+    pin: GPIO17
+    id: andon_yellow
+    name: "Yellow"
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: group_andon
+      sorting_weight: 20
+
+  - platform: gpio
+    pin: GPIO26
+    id: andon_green
+    name: "Green"
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: group_andon
+      sorting_weight: 30
+
+  - platform: gpio
+    pin: GPIO27
+    id: andon_buzzer
+    name: "Buzzer"
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: group_andon
+      sorting_weight: 40
+
+# Transient fields used to provision a new Wi-Fi network.
+text:
+  - platform: template
+    id: setup_wifi_ssid
+    name: "New WiFi SSID"
+    optimistic: true
+    min_length: 1
+    max_length: 32
+    mode: text
+    restore_value: false
+    web_server:
+      sorting_group_id: group_wifi
+      sorting_weight: 10
+
+  - platform: template
+    id: setup_wifi_password
+    name: "New WiFi Password"
+    optimistic: true
+    min_length: 0
+    max_length: 64
+    mode: password
+    restore_value: false
+    web_server:
+      sorting_group_id: group_wifi
+      sorting_weight: 20
+
+button:
+  - platform: template
+    id: connect_new_wifi
+    name: "Connect & Save WiFi"
+    web_server:
+      sorting_group_id: group_wifi
+      sorting_weight: 30
+    on_press:
+      - logger.log: "Trying user-configured WiFi network"
+      - wifi.configure:
+          ssid: !lambda 'return id(setup_wifi_ssid).state;'
+          password: !lambda 'return id(setup_wifi_password).state;'
+          save: true
+          timeout: 30s
+          on_connect:
+            - logger.log: "Connected to new WiFi network"
+          on_error:
+            - logger.log: "Failed to connect to new WiFi network"
+
+  - platform: restart
+    name: "Restart Andon Controller"
+    web_server:
+      sorting_group_id: group_system
+      sorting_weight: 10
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      web_server:
+        sorting_group_id: group_status
+        sorting_weight: 10
+
+    ssid:
+      name: "Connected WiFi"
+      web_server:
+        sorting_group_id: group_status
+        sorting_weight: 20
+
+    bssid:
+      name: "WiFi Access Point"
+      web_server:
+        sorting_group_id: group_status
+        sorting_weight: 30
+
+    mac_address:
+      name: "ESP32 MAC Address"
+      web_server:
+        sorting_group_id: group_status
+        sorting_weight: 40
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 30s
+    web_server:
+      sorting_group_id: group_status
+      sorting_weight: 50
+
+  - platform: uptime
+    name: "Uptime"
+    update_interval: 60s
+    web_server:
+      sorting_group_id: group_status
+      sorting_weight: 60
+
+# MQTT/UNS is intentionally not enabled yet.
+# Add it after the GPIO mapping, 12 V operation and fallback UI are verified.

@@ -48,27 +48,36 @@ The board silkscreen identifies:
 5V | TX | RX | GND | GND | IO0
 ```
 
-The header pins are not yet soldered.
+The six-pin UART header has now been soldered and was used for the successful first flash.
 
 ### GPIO breakout
 
 The back of the board exposes standard ESP32 signals including GPIOs, power and ground. These are useful for later additions such as an acknowledge button.
 
-### Unknowns to verify
+### GPIO mapping to verify
 
-Do not finalize firmware pin assignments until these are tested:
+The expected mapping for this ESP32 MOS x4 board family is:
 
-- GPIO -> OUT1 mapping
-- GPIO -> OUT2 mapping
-- GPIO -> OUT3 mapping
-- GPIO -> OUT4 mapping
+| MOSFET output | Expected ESP32 GPIO |
+| --- | ---: |
+| OUT1 | GPIO16 |
+| OUT2 | GPIO17 |
+| OUT3 | GPIO26 |
+| OUT4 | GPIO27 |
+
+Do not treat this mapping as confirmed until it is measured on the received board. Remaining checks:
+
+- verify GPIO16 -> OUT1
+- verify GPIO17 -> OUT2
+- verify GPIO26 -> OUT3
+- verify GPIO27 -> OUT4
 - active-high versus active-low GPIO behavior
 - exact relationship between each OUT+ and OUT- terminal
 - output state during ESP32 reset/boot
 
 ## 3. USB-to-UART adapter
 
-The received adapter exposes:
+The received Silicon Labs CP210x adapter exposes:
 
 ```text
 3V3 | GND | +5V | TXD | RXD | DTR
@@ -85,7 +94,7 @@ GND         -> GND
 
 Do not connect +5 V or 3.3 V from the UART adapter when the ESP32 board is independently powered.
 
-The UART logic level must be 3.3 V compatible with the ESP32.
+The adapter was detected successfully by Windows as a Silicon Labs CP210x USB-to-UART Bridge on COM7 during bring-up. The UART logic level must remain 3.3 V compatible with the ESP32.
 
 ## 4. Initial bootloader procedure
 
@@ -121,7 +130,7 @@ This is a target diagram, not yet a verified wiring instruction. Before connecti
 
 ## 6. Power
 
-The lamp is a 12 V device and the controller accepts 12 V input, so the final demonstrator can use one 12 V DC supply.
+The lamp is a 12 V device and the controller accepts 12 V input. The board includes its own DC conversion for the ESP32, so the intended final demonstrator uses one 12 V DC supply for both the controller electronics and the Andon load. This still needs to be verified on the assembled hardware before the lamp is connected.
 
 Before selecting the final supply, measure or obtain:
 

@@ -1,25 +1,28 @@
 # Andon alarm philosophy
 
+Last reviewed: 2026-09-19
+
 ## Purpose
 
-The Andon should communicate operational meaning, not raw GPIO states.
+The Andon communicates operational meaning rather than raw GPIO state.
 
-The design follows common industrial stack-light conventions:
+The design follows common industrial signal conventions:
 
 - green = normal / ready / running
 - yellow = abnormal / attention / intervention may be required
 - red = fault / stop / critical condition
-- audible indication = draws operator attention to a new condition
-- acknowledge = silence the audible annunciation while retaining a visible indication
-- reset/clear = a separate action from acknowledge
+- audible indication = draw attention to a new condition
+- acknowledge = silence the audible annunciation while retaining the visible condition
+- clear/reset = separate from acknowledge
 
-There is no universal rule that fixes one exact flash frequency for every factory. This project therefore uses a small, consistent set of patterns that are easy to explain in a demo and align with common industrial signal-tower practice.
+There is no universal exact flash frequency for every factory. This demonstrator uses a small consistent set that is easy to understand and test.
 
-References:
+Reference concepts used when the model was defined:
+
 - IEC 60204-1 indicator-light color conventions
 - ISA-18.1 annunciator sequence concepts
 - ISA-18.2 alarm management concepts
-- Patlite industrial signal towers with 30/60/120 flashes per minute patterns
+- common industrial signal-tower flash patterns
 
 ## Flash rates
 
@@ -47,56 +50,102 @@ References:
 | MAINTENANCE | yellow steady | off | maintenance/service state |
 | MANUAL | raw outputs | manual | commissioning and diagnostics |
 
+This mode set is deployed in firmware 0.5.0.
+
 ## Acknowledge behavior
 
 For WARNING, URGENT_WARNING, FAULT, CRITICAL and EMERGENCY:
 
-1. New condition flashes and may sound the buzzer.
-2. Operator presses Acknowledge.
-3. Buzzer stops.
-4. The active color becomes steady.
-5. The mode remains active until cleared or replaced.
+1. the new condition flashes and may sound the buzzer
+2. operator acknowledges
+3. buzzer stops
+4. active color becomes steady
+5. mode remains active until cleared or replaced
 
-Acknowledge therefore does not mean the underlying condition is resolved.
+Acknowledge therefore does not mean that the underlying process condition has been resolved.
+
+Current acknowledge paths:
+
+- local web interface
+- Home Assistant native ESPHome API
+- standard MQTT button command
+
+MQTT command:
+
+```text
+andon-light-01/button/acknowledge_alarm/command
+payload: PRESS
+```
 
 ## Buzzer Mute Override
 
-The project adds a separate global control:
-
-```text
-Buzzer Mute Override
-```
-
-This is deliberately different from alarm acknowledgement.
+Buzzer Mute Override is deliberately separate from acknowledgement.
 
 When enabled:
 
-- every visual mode continues normally
-- mode/severity remains unchanged
+- visual mode continues
+- severity/mode remains unchanged
 - acknowledge state remains unchanged
-- the physical buzzer is forced OFF
-- manual buzzer activation is also suppressed
+- physical buzzer is forced off
+- manual buzzer activation is suppressed by firmware logic
 
-The override is intended for demos, quiet lab work, presentations and commissioning where repeated audible alarms would be disruptive.
+Current control paths:
 
-The override is exposed both in:
+- local web interface
+- Home Assistant native ESPHome API
+- standard MQTT switch command
 
-- ESPHome local web interface
-- Home Assistant through the native ESPHome API
+MQTT example:
 
-The mute state is restored after reboot so a device muted for a demo does not unexpectedly become noisy after a power cycle.
+```text
+andon-light-01/switch/buzzer_mute_override/command
+payload: ON
+```
+
+The firmware uses a restoring switch mode so the mute setting is intended to survive reboot. A deliberate full power-cycle validation remains open.
 
 ## Hardware-specific constraint
 
-The current HNTD TD-50 has been physically tested and shows an internal interaction between red and yellow. Red + yellow cannot be used reliably at the same time even when the MOSFET outputs are swapped, which localizes the behavior to the Andon hardware.
+The physical HNTD TD-50 has a confirmed internal red/yellow interaction.
 
-Therefore all semantic modes use exactly one lamp color at a time.
+Observed:
 
-The MANUAL mode remains available for diagnostics, but multi-color combinations are not considered valid operational states for this unit.
+- red + green works
+- yellow + green works
+- red + yellow is unreliable
+- swapping MOSFET channels does not move the problem
 
-## Future MQTT / UNS model
+All semantic modes therefore use one lamp color at a time.
 
-The mute override should eventually be represented separately from the process alarm state.
+MANUAL remains available for diagnostics, but multi-color combinations are not considered valid operational states for this unit.
+
+## Current MQTT representation
+
+Today the active MQTT representation is the standard ESPHome entity/state model.
+
+Andon mode:
+
+```text
+andon-light-01/select/andon_mode/command
+andon-light-01/select/andon_mode/state
+```
+
+Buzzer mute:
+
+```text
+andon-light-01/switch/buzzer_mute_override/command
+andon-light-01/switch/buzzer_mute_override/state
+```
+
+Acknowledge:
+
+```text
+andon-light-01/button/acknowledge_alarm/command
+```
+
+## Future semantic UNS model
+
+A future UNS implementation may represent the process condition, operator acknowledgement and local presentation override independently.
 
 Example:
 
@@ -118,8 +167,4 @@ Example:
 }
 ```
 
-This distinction is useful in a UNS because it separates:
-
-- the machine/process condition
-- operator acknowledgement
-- local presentation overrides
+This custom representation is not implemented in firmware 0.5.0. It remains a later UNS experiment.

@@ -1,79 +1,133 @@
-# Project status - 2026-09-19
+# Project status
 
-## Working now
+Last reviewed: 2026-09-19
 
-- ESP32-WROOM-32E controller operational
-- HNTD TD-50 Andon powered from the 12 V setup
-- GPIO16 / GPIO17 / GPIO26 / GPIO27 mapped to red / yellow / green / buzzer
-- Wi-Fi and encrypted ESPHome native API working
-- ESPHome OTA working
-- local ESPHome web portal tested successfully
-- fallback/local web architecture implemented
-- semantic modes, flash patterns, alarm acknowledge and Buzzer Mute Override working
-- TD-50 internal red/yellow interaction confirmed as an Andon hardware limitation
+## Overall status
 
-## Firmware 0.5.0
+Working MQTT demonstrator.
 
-Firmware 0.5.0 is deployed and working.
+Firmware 0.5.0 is deployed on the physical ESP32/Andon assembly.
 
-The local web portal now allows runtime MQTT configuration of:
+The project has moved beyond hardware bring-up. The current priority is to preserve a stable working baseline and validate portability before adding any custom UNS layer.
 
-- broker hostname or IP address
-- port
-- username
-- password
-- topic prefix
-- Save & Connect MQTT
-- Disconnect MQTT
-- MQTT Connected status
+## Working
 
-The intention is field portability: at an industrial site the Andon can join the local Wi-Fi and be pointed at that site's MQTT broker without recompiling or reflashing firmware.
+### Hardware
 
-## MQTT validation
+- ESP32-WROOM-32E quad-MOSFET controller
+- 12 V HNTD TD-50 Andon
+- red, yellow, green and buzzer outputs
+- common 12 V power arrangement
+- UART recovery hardware
 
-Home Assistant Mosquitto is installed and running at:
+Confirmed mapping:
+
+```text
+GPIO16 -> OUT1 -> Red
+GPIO17 -> OUT2 -> Yellow
+GPIO26 -> OUT3 -> Green
+GPIO27 -> OUT4 -> Buzzer
+```
+
+### Local behavior
+
+- semantic Andon modes
+- flash patterns
+- buzzer patterns
+- acknowledge
+- Clear / OFF
+- Buzzer Mute Override
+- manual diagnostic outputs
+
+### Connectivity and management
+
+- home Wi-Fi
+- protected fallback AP
+- local Web Server v3
+- runtime Wi-Fi provisioning
+- encrypted ESPHome native API
+- ESPHome OTA
+- runtime MQTT broker configuration
+
+### MQTT
+
+Home-lab Mosquitto:
 
 ```text
 192.168.129.15:1883
 ```
 
-The Andon connects successfully with its dedicated MQTT credentials.
+Verified:
 
-Verified on 2026-09-19:
+- MQTT connects
+- Home Assistant listens successfully
+- Home Assistant publishes successfully
+- Andon mode can be changed through MQTT
+- mode state is published
+- buzzer mute can be controlled
+- acknowledge can be triggered
+- Home Assistant MQTT discovery is disabled to prevent duplicate entities
 
-- MQTT connection succeeds
-- Home Assistant can listen to Andon MQTT traffic
-- Home Assistant can publish MQTT commands
-- Andon mode can be changed over the standard ESPHome MQTT command topic
-- current state is published back over the corresponding ESPHome state topic
-- Buzzer Mute Override can be controlled over MQTT
-- Acknowledge can be triggered over MQTT
-- Home Assistant MQTT discovery remains disabled to avoid duplicate entities beside the native ESPHome API
-
-The current working interface is the standard ESPHome MQTT topic structure. The planned custom `hupla/demo/factory01/...` semantic UNS topic structure is deliberately deferred.
-
-## Current project position
-
-The demonstrator now proves three independent control paths:
+Current MQTT API:
 
 ```text
-Local Andon web UI
-        |
-Home Assistant native ESPHome API
-        |
-Standard MQTT through Mosquitto
-        |
-      ESP32
-        |
-   Andon tower
+standard ESPHome MQTT topics
 ```
 
-This is sufficient as the present baseline. The next UNS layer should only be added when it supports a concrete demo scenario rather than as extra protocol work by itself.
+Custom Hupla/UNS topics are not active.
 
-## Later validation
+## Known limitation
 
-1. Verify persisted MQTT settings after a full power cycle.
-2. Change broker configuration from the web portal and connect to a second broker without reflashing.
-3. Validate operation while Home Assistant is unavailable.
-4. Verify browser-based web OTA.
-5. Later decide on custom semantic topics, retained state, birth/last-will and a fuller UNS demo.
+The TD-50 has an internal red/yellow interaction.
+
+Red and yellow cannot be relied on simultaneously even after swapping the control wires across different MOSFET outputs.
+
+Operational consequence:
+
+- semantic modes use one color at a time
+- multi-color combinations are diagnostics only
+
+## Runtime MQTT configuration
+
+Available through the web UI:
+
+- broker hostname/IP
+- port
+- username
+- password
+- topic prefix
+- Save & Connect
+- Disconnect
+- connected status
+
+The Topic Prefix field is reserved for later custom UNS logic and does not currently change standard ESPHome topics.
+
+## Open validation
+
+- full power-cycle persistence
+- second MQTT broker
+- Home Assistant deliberately offline
+- runtime Wi-Fi persistence after full power loss
+- Web OTA
+- safe boot/output observation
+- final fuse/strain relief/enclosure
+
+## Deferred work
+
+Not required for the current baseline:
+
+- custom semantic MQTT command/state topics
+- custom retained state
+- custom birth/last-will
+- event stream
+- OPC UA bridge
+- Sparkplug B
+- Node-RED demo
+- MES/SCADA scenario
+- runtime TLS certificate provisioning
+
+## Current project decision
+
+Do not extend MQTT only for architectural neatness.
+
+The next custom MQTT/UNS work should be tied to a concrete industrial scenario so the Andon demonstrates producer/consumer decoupling rather than just another topic hierarchy.

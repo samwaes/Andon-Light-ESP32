@@ -1,65 +1,82 @@
 # MQTT and UNS model
 
-## Objective
+Last reviewed: 2026-09-19
 
-MQTT is the portable interface of the Andon demonstrator.
+## Current position
 
-The MQTT model should represent industrial meaning, not ESP32 implementation details.
+MQTT is working today.
 
-A client should be able to request FAULT without knowing which GPIO controls the red lamp or buzzer.
+UNS-specific custom topics are not.
+
+The current project baseline uses ESPHome's standard MQTT entity topics. This is sufficient for:
+
+- connecting the physical Andon to Mosquitto
+- reading state
+- changing Andon mode
+- muting/unmuting the buzzer
+- acknowledging alarms
+- testing publish and subscribe behavior
+- moving the device to another broker without reflashing
+
+A separate custom Hupla/UNS topic model remains a future experiment.
 
 ## Runtime broker provisioning
 
-Firmware 0.5.0 separates broker configuration from the compiled firmware.
+Firmware 0.5.0 exposes these fields through the Andon web interface:
 
-The local Andon web interface stores:
+- MQTT Broker
+- MQTT Port
+- MQTT Username
+- MQTT Password
+- MQTT Topic Prefix
+- Save & Connect MQTT
+- Disconnect MQTT
+- MQTT Connected
 
-- broker hostname or IP
-- broker port
-- username
-- password
-- topic prefix
+Broker hostname/IP, port and credentials are applied at runtime.
 
-The operator can therefore move the device to another industrial MQTT environment without reflashing it.
-
-Current scope is MQTT TCP with optional username/password. Dynamic TLS certificate provisioning is not yet implemented.
-
-## Namespace
-
-Initial development namespace:
+Current home-lab broker:
 
 ```text
-hupla/demo/factory01/line01/andon01
+192.168.129.15:1883
 ```
 
-This is intentionally simple and can later be aligned with a broader ISA-95, UNS or customer naming model.
+This broker has been validated.
 
-## Proposed topics
+A second independent broker has not yet been tested.
+
+## Current working MQTT topics
+
+ESPHome currently creates the active topic hierarchy.
 
 ### Availability
 
 ```text
-hupla/demo/factory01/line01/andon01/status/online
+andon-light-01/status
 ```
 
-Payload:
+Standard ESPHome availability payloads are:
 
 ```text
 online
 offline
 ```
 
-Retain: yes.
+### Andon mode
 
-Use MQTT birth and last-will behavior.
-
-### Command mode
+Command:
 
 ```text
-hupla/demo/factory01/line01/andon01/command/mode
+andon-light-01/select/andon_mode/command
 ```
 
-Accepted payloads:
+State:
+
+```text
+andon-light-01/select/andon_mode/state
+```
+
+Useful command payloads:
 
 ```text
 OFF
@@ -74,168 +91,172 @@ CRITICAL
 EMERGENCY
 STOPPED
 MAINTENANCE
+MANUAL
 ```
 
-Retain: no.
+### Buzzer Mute Override
 
-### Buzzer mute override
-
-The audible presentation override is separate from the machine/process mode.
+Command:
 
 ```text
-hupla/demo/factory01/line01/andon01/command/buzzer_muted
+andon-light-01/switch/buzzer_mute_override/command
+```
+
+State:
+
+```text
+andon-light-01/switch/buzzer_mute_override/state
+```
+
+Payloads:
+
+```text
+ON
+OFF
+TOGGLE
+```
+
+### Alarm acknowledge
+
+Command:
+
+```text
+andon-light-01/button/acknowledge_alarm/command
 ```
 
 Payload:
 
 ```text
-true
-false
+PRESS
 ```
 
-The override must not change the selected mode and must not implicitly acknowledge the alarm.
+These paths have been validated using Home Assistant's MQTT listen/publish tools.
 
-Proposed retained state:
+## Home Assistant role
+
+Home Assistant currently has two distinct relationships with the device:
+
+1. normal control through the encrypted ESPHome native API
+2. MQTT test client through the MQTT integration
+
+MQTT discovery is disabled in ESPHome to prevent duplicate Home Assistant entities.
+
+Mosquitto itself does not require a manual "Andon device" object. The ESP32 and Home Assistant are simply MQTT clients connected to the broker.
+
+## Topic Prefix field
+
+The local web UI currently contains an MQTT Topic Prefix field with initial value:
 
 ```text
-hupla/demo/factory01/line01/andon01/state/buzzer_muted
+hupla/demo/factory01/line01/andon01
 ```
 
-### Alarm acknowledge
+Important:
+
+- it is saved as runtime configuration
+- it is reserved for later custom semantic topics
+- it does not currently alter the automatic ESPHome MQTT topics
+- changing it today does not move the existing `andon-light-01/...` topics
+
+This distinction must remain explicit in project documentation.
+
+## Deferred UNS model
+
+The original concept remains useful, but it is now treated as a future layer rather than current functionality.
+
+Possible namespace:
 
 ```text
-hupla/demo/factory01/line01/andon01/command/acknowledge
+hupla/demo/factory01/line01/andon01
 ```
 
-An acknowledge command silences the current audible annunciation and makes the active warning/fault color steady, but does not clear the mode.
-
-### Raw output command
-
-For commissioning only:
+Possible future topics:
 
 ```text
-hupla/demo/factory01/line01/andon01/command/outputs
+.../status/online
+.../command/mode
+.../command/acknowledge
+.../command/buzzer_muted
+.../state/mode
+.../state/acknowledged
+.../state/buzzer_muted
+.../state/outputs
+.../event
 ```
 
-Example:
+Possible policy:
+
+| Topic type | Retain |
+| --- | --- |
+| availability | yes |
+| current state | yes |
+| command | no |
+| event | no |
+
+## Why not implement it now
+
+The current ESPHome MQTT interface already proves:
+
+- broker connection
+- pub/sub
+- read/write state
+- physical response
+- broker portability
+
+Adding a second custom topic API now would mainly add code and maintenance.
+
+The UNS layer becomes valuable when the demo has a real upstream producer, for example:
+
+- PLC
+- SCADA
+- MES
+- Node-RED
+- OPC UA gateway
+- industrial data platform
+
+At that point the design question should be whether the Andon consumes a dedicated command such as `FAULT`, or subscribes to shared machine/process state.
+
+## Future semantic example
+
+A future UNS might publish machine state once:
+
+```text
+factory/site01/line01/machine01/state
+```
+
+Example payload:
 
 ```json
 {
-  "red": false,
-  "yellow": true,
-  "green": false,
-  "buzzer": false,
-  "buzzer_muted": true,
-  "acknowledged": false
+  "state": "FAULT",
+  "reason": "temperature_high",
+  "temperature": 92.4
 }
 ```
 
-Retain: no.
-
-### Current mode
+Consumers could include:
 
 ```text
-hupla/demo/factory01/line01/andon01/state/mode
+MES
+dashboard
+historian
+AI/analytics
+Andon
 ```
 
-Example:
+The Andon would then become a physical consumer of operational context rather than a device that must receive a vendor-specific lamp command.
 
-```text
-WARNING
-```
+## Future extensions
 
-Retain: yes.
+Only when a concrete demo requires them:
 
-### Current outputs
-
-```text
-hupla/demo/factory01/line01/andon01/state/outputs
-```
-
-Example:
-
-```json
-{
-  "red": false,
-  "yellow": true,
-  "green": false,
-  "buzzer": false
-}
-```
-
-Retain: yes.
-
-### Events
-
-```text
-hupla/demo/factory01/line01/andon01/event
-```
-
-Example:
-
-```json
-{
-  "event": "alarm_acknowledged",
-  "source": "operator",
-  "mode": "FAULT"
-}
-```
-
-Retain: no.
-
-## Machine simulator
-
-The UNS demo should not stop at direct Andon control.
-
-A simulated asset can publish:
-
-```text
-hupla/demo/factory01/line01/machine01/state
-```
-
-Example:
-
-```json
-{
-  "state": "RUNNING",
-  "speed": 118,
-  "target_speed": 120,
-  "temperature": 54.2,
-  "quality": 98.7
-}
-```
-
-A rule engine or Node-RED flow can derive the Andon condition.
-
-Example:
-
-```text
-temperature < 75     -> RUNNING
-temperature >= 75    -> WARNING
-temperature >= 90    -> FAULT
-```
-
-The Andon then becomes one subscriber to the same information used by dashboards, analytics and other consumers.
-
-## UNS demonstration value
-
-The demo should show:
-
-1. Producer and consumer decoupling
-2. One data publication feeding multiple consumers
-3. Semantic information instead of hardware commands
-4. Retained current state
-5. Non-retained events
-6. Device availability
-7. Edge behavior without Home Assistant
-
-## Later extensions
-
-- richer asset hierarchy
-- alarm IDs
-- timestamps sourced from an NTP-synchronized ESP32 or upstream system
-- acknowledge/reset workflow
+- custom semantic MQTT API
+- retained state
+- custom birth and last will
+- event messages
+- machine-state abstraction
 - Sparkplug B comparison
-- OPC UA bridge
+- OPC UA to MQTT bridge
 - MQTT TLS
-- per-device authentication and ACLs
+- client certificate provisioning
+- ACL examples

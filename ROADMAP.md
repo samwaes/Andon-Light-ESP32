@@ -14,27 +14,73 @@ Status: in progress
 
 ## Phase 1 - ESP32 bring-up
 
-- [ ] Solder the six-pin UART programming header
-- [ ] Confirm USB-UART logic level is 3.3 V
-- [ ] Connect TXD -> RX, RXD -> TX, GND -> GND
-- [ ] Power the ESP32 board independently
-- [ ] Enter bootloader mode using IO0
-- [ ] Flash minimal ESPHome firmware
-- [ ] Verify serial log output
-- [ ] Join home Wi-Fi
-- [ ] Verify fallback AP and captive portal
-- [ ] Verify ESPHome OTA update
-- [ ] Verify authenticated web OTA update
-- [ ] Confirm UART remains available as recovery path
+Status: core bring-up complete
 
-Success criterion: the ESP32 can be reflashed over Wi-Fi without the UART adapter and can accept new Wi-Fi credentials through its fallback access point when no known network is available.
+- [x] Solder the six-pin UART programming header
+- [x] Detect Silicon Labs CP210x adapter on Windows
+- [x] Connect TXD -> RX, RXD -> TX, GND -> GND
+- [x] Power the ESP32 board independently during serial flashing
+- [x] Enter bootloader mode using IO0
+- [x] Complete first ESPHome flash
+- [x] Join home Wi-Fi
+- [x] Confirm encrypted ESPHome native API
+- [x] Verify ESPHome OTA update using a friendly-name change
+- [ ] Verify browser-based web OTA with a firmware.ota.bin image
+- [ ] Verify UART as a deliberate recovery path
+
+Observed runtime during successful OTA test:
+
+- ESPHome 2026.8.2
+- ESP32 rev 3.1, dual core
+- native API handshake successful
+- OTA service available
+- Web Server OTA component loaded
+
+Success criterion achieved for normal development: the ESP32 can now be updated wirelessly without the UART adapter.
+
+## Phase 1B - Standalone fallback interface
+
+Design decision: use the ESPHome fallback AP and normal local web server together, rather than relying on the captive portal as the primary fallback UI.
+
+Target behavior:
+
+```text
+Known Wi-Fi available
+  -> join normal network
+  -> Home Assistant / local web / later MQTT
+
+No known Wi-Fi available
+  -> start Andon-Setup
+  -> browse to 192.168.4.1
+  -> control Red / Yellow / Green / Buzzer
+  -> enter new SSID + password
+  -> Connect & Save WiFi
+```
+
+- [ ] Remove `captive_portal:` from the next firmware baseline
+- [ ] Enable protected fallback AP `Andon-Setup`
+- [ ] Enable authenticated Web Server v3 with local assets
+- [ ] Add Red / Yellow / Green / Buzzer controls to the local web UI
+- [ ] Add SSID and password fields to the local web UI
+- [ ] Add `wifi.configure` action with persistent save
+- [ ] Verify direct control while only connected to the fallback AP
+- [ ] Verify saved Wi-Fi survives reboot
 
 ## Phase 2 - MOSFET output mapping
 
-- [ ] Determine the ESP32 GPIO for OUT1
-- [ ] Determine the ESP32 GPIO for OUT2
-- [ ] Determine the ESP32 GPIO for OUT3
-- [ ] Determine the ESP32 GPIO for OUT4
+Expected board-family mapping, still to be verified:
+
+| Output | Expected GPIO |
+| --- | ---: |
+| OUT1 | GPIO16 |
+| OUT2 | GPIO17 |
+| OUT3 | GPIO26 |
+| OUT4 | GPIO27 |
+
+- [ ] Verify GPIO16 -> OUT1
+- [ ] Verify GPIO17 -> OUT2
+- [ ] Verify GPIO26 -> OUT3
+- [ ] Verify GPIO27 -> OUT4
 - [ ] Confirm whether GPIO high means MOSFET ON
 - [ ] Confirm boot behavior does not energize outputs unexpectedly
 - [ ] Measure output terminals with a multimeter before attaching the Andon
@@ -52,8 +98,7 @@ Proposed channel allocation:
 | OUT3 | Green |
 | OUT4 | Buzzer |
 
-This allocation can change after the GPIO mapping is known.
-
+- [ ] Verify 12 V DC input powers both the controller and ESP32 in the real setup
 - [ ] Connect brown Andon wire to +12 V
 - [ ] Connect color/buzzer control wires to switched outputs
 - [ ] Verify red
@@ -65,9 +110,9 @@ This allocation can change after the GPIO mapping is known.
 
 ## Phase 4 - Home Assistant
 
-- [ ] Enable encrypted ESPHome native API
-- [ ] Add device to Home Assistant
-- [ ] Create four low-level diagnostic output entities
+- [x] Encrypted ESPHome native API running
+- [x] Device visible and online in ESPHome Device Builder
+- [ ] Add four low-level diagnostic output entities after GPIO verification
 - [ ] Add semantic Andon mode control
 - [ ] Add Home Assistant dashboard card
 - [ ] Verify device remains operational when Home Assistant is stopped

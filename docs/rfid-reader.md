@@ -72,6 +72,32 @@ Before relying on this, check the precise ESPHome version and MQTT event configu
 
 Reset, acknowledge and sound mute controls are separate digital inputs and do not need to share I²C. Candidate GPIOs should be checked against the board footprint and final firmware pin allocation before wiring. A physical emergency-stop input can report an emergency state to the Andon, but it must not be treated as a machine safety circuit. A real emergency stop requires a suitable hardwired safety device and safety chain independent of the ESP32, Wi-Fi, Home Assistant and MQTT.
 
+## Existing reference project: Adonno Tag Reader
+
+The reader project you identified is [adonno/tagreader](https://github.com/adonno/tagreader). It is an ESPHome-based Home Assistant NFC reader built around a D1 Mini ESP8266 and a PN532. Its README also documents the I²C switch setting used by your PN532 V3.
+
+Useful files and parts:
+
+- [Project README and build instructions](https://github.com/adonno/tagreader/blob/master/README.md): hardware overview, PN532 I²C mode and Home Assistant tag use.
+- [tagreader.yaml](https://github.com/adonno/tagreader/blob/master/tagreader.yaml): the ESPHome configuration. The relevant reference is its `i2c:`, `pn532_i2c:`, `on_tag:` and `homeassistant.tag_scanned` sections.
+- [Schematics](https://github.com/adonno/tagreader/tree/master/Schematics) and [3D case files](https://github.com/adonno/tagreader/tree/master/STLs): useful if building a separate, standalone reader.
+
+### How to reuse it for this Andon
+
+Use Adonno's repository as a working reference for the PN532 wiring and the tag-reading flow. Adapt the PN532 I²C and tag-event portions into this project's existing ESP32 configuration. This Andon already has its own ESP32, Wi-Fi, Home Assistant API, MQTT client, local web interface and output logic.
+
+Do not flash Adonno's `tagreader.yaml` unchanged onto the Andon controller. It targets an ESP8266 D1 Mini and defines a separate standalone reader. Its GPIO assignments and ESP8266-specific LED/buzzer outputs do not match the ESP32 quad-MOSFET Andon board. Copying its full configuration could conflict with the Andon outputs and existing services.
+
+The useful adaptation pattern is:
+
+1. Reuse the PN532 I²C mode and wiring concept.
+2. Add the ESPHome PN532 hub and `on_tag` handling to the Andon YAML.
+3. Send the scanned tag event to Home Assistant, where HA's tag registry and automations can map tags to acknowledge or reset actions.
+4. If MQTT is also needed, publish the scan event through the Andon firmware's MQTT setup, with broker permissions that restrict access to the event topic.
+5. Leave Adonno's optional WS2812 activity light, buzzer, tag-writing controls, captive portal and ESP8266 pin assignments out unless separately required and adapted.
+
+The Adonno configuration calls `homeassistant.tag_scanned` for scanned UIDs, which is the useful model for keeping tag-to-action configuration in Home Assistant rather than embedding an allowlist in firmware. Its code is licensed under GPL-3.0. If code is copied into this repository, retain the required license and attribution notices and check GPL-3.0 obligations for the resulting distribution.
+
 ## References
 
 - [ELECHOUSE PN532 V3 manual](https://www.elechouse.com/elechouse/images/product/PN532_module_V3/PN532_%20Manual_V3.pdf)

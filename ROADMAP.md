@@ -169,9 +169,37 @@ Possible components:
 - OPC UA gateway
 - one-command demo startup procedure
 
+## Milestone 8 - Operator controls and RFID
+
+Status: planned. Hardware and firmware changes are not implemented yet.
+
+### Physical controls
+
+- [ ] Add a physical emergency-state button/input for the Andon demonstrator
+- [ ] Add a physical alarm reset button, with behavior distinguished from acknowledge
+- [ ] Add a physical buzzer enable/mute switch or button
+- [ ] Decide whether the local alarm test function also needs a physical button
+- [ ] Confirm free GPIOs on the exact controller board and assign pins
+- [ ] Implement debouncing, startup state and input fault behavior
+- [ ] Test controls locally and through Home Assistant/MQTT where appropriate
+
+**Safety boundary:** the ESP32 emergency input is only an Andon status/control for the demonstrator. It is not a safety-rated emergency stop and must not be used to stop hazardous machinery. A real emergency stop must use a suitable hardwired safety circuit independent of ESP32 firmware and network services.
+
+### RFID/NFC reader
+
+- [ ] Integrate the existing ELECHOUSE PN532 NFC/RFID Module V3
+- [ ] Start with a short I²C connection using GPIO21 (SDA) and GPIO22 (SCL)
+- [ ] Report tag scans to Home Assistant and/or MQTT
+- [ ] Keep tag authorization and tag-to-action mapping external to the ESP32 firmware
+- [ ] Define tag actions, for example acknowledge or request alarm reset
+- [ ] Test unknown tags, repeated scans and loss of Home Assistant/MQTT
+- [ ] Decide whether the reader will sit near the controller or about two metres away
+- [ ] If needed, evaluate a differential I²C extender or a separate ESP32 reader node
+
+See [docs/rfid-reader.md](docs/rfid-reader.md) for available hardware, wiring, placement options and the test sequence.
+
 ## Later ideas
 
-- physical acknowledge/reset button
 - local test button
 - Ethernet-capable controller variant
 - TLS broker support

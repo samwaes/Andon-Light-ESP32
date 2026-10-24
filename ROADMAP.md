@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-09-19
+Last reviewed: 2026-10-24
 
 ## Current project position
 
